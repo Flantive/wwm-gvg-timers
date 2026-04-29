@@ -88,7 +88,10 @@ function createWindow() {
     transparent: true,
     alwaysOnTop: true,
     hasShadow: false,
-    resizable: false,
+    resizable: true,
+    minWidth: 260,
+    minHeight: 630,
+    maxHeight: 630,
     skipTaskbar: !app.isPackaged,
     webPreferences: {
       preload: preloadPath,
@@ -103,6 +106,12 @@ function createWindow() {
   } else {
     overlayWindow.loadFile(rendererPath)
   }
+
+  overlayWindow.on('will-resize', (event, _newBounds, details) => {
+    if (details?.edge !== 'right') {
+      event.preventDefault()
+    }
+  })
 
   overlayWindow.setAlwaysOnTop(true, 'screen-saver')
   overlayWindow.setVisibleOnAllWorkspaces(true)

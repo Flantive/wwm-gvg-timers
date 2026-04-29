@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import InitialSetupScreen from './components/InitialSetupScreen'
 import OffenseTimers from './components/OffenseTimers'
 import DefenseTimers from './components/DefenseTimers'
@@ -10,6 +10,8 @@ const initialTimers = [
   // { id: 3, name: 'Buff / Buff Cooldown', duration: 90, remaining: 90, isRunning: false },
   // { id: 4, name: 'Tower Push Timer', duration: 240, remaining: 240, isRunning: false },
 ]
+const baseOverlayWidth = 380
+const baseOverlayHeightFallback = 420
 const defaultServerUrl = 'http://217.182.78.238:3333'
 
 const setupStorageKey = 'wwm-overlay-setup'
@@ -61,9 +63,12 @@ function App() {
   const [, setGvgRunning] = useState(false)
   const [gvgScope, setGvgScope] = useState(null)
   const [serverUrl, setServerUrl] = useState(defaultServerUrl)
+  const [overlayScale, setOverlayScale] = useState(1)
+  const [contentHeight, setContentHeight] = useState(baseOverlayHeightFallback)
   const [isConfigured, setIsConfigured] = useState(() => loadSavedSetup().isConfigured)
   const [setupError, setSetupError] = useState('')
   const [setup, setSetup] = useState(() => loadSavedSetup().setup)
+  const overlayContentRef = useRef(null)
 
   const isCommander = setup.mode === 'Commander'
   const TeamTimers = setup.team === 'Defense' ? DefenseTimers : OffenseTimers
@@ -102,6 +107,36 @@ function App() {
       active = false
     }
   }, [])
+
+  useEffect(() => {
+    if (!overlayContentRef.current || typeof ResizeObserver === 'undefined') {
+      return
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (!entry) {
+        return
+      }
+      setContentHeight(Math.max(baseOverlayHeightFallback, Math.ceil(entry.contentRect.height)))
+    })
+
+    observer.observe(overlayContentRef.current)
+
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    const updateScale = () => {
+      const widthScale = window.innerWidth / baseOverlayWidth
+      const heightScale = window.innerHeight / (contentHeight || baseOverlayHeightFallback)
+      setOverlayScale(Math.max(0.6, Math.min(widthScale, heightScale)))
+    }
+
+    updateScale()
+    window.addEventListener('resize', updateScale)
+    return () => window.removeEventListener('resize', updateScale)
+  }, [contentHeight])
 
   const applyStatusTimers = useCallback((status) => {
     if (!status) {
@@ -171,60 +206,73 @@ function App() {
   }
 
   return (
-    <div className="w-[380px] bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl text-white overflow-hidden">
+    <div className="w-screen h-screen flex items-start justify-center overflow-hidden">
       <div
-        className="px-3 py-2 bg-black/90 flex items-center justify-between border-b border-white/10 cursor-move"
-        style={{ WebkitAppRegion: 'drag' }}
+        style={{
+          width: `${baseOverlayWidth}px`,
+          transform: `scale(${overlayScale})`,
+          transformOrigin: 'top center',
+        }}
       >
-        <h1 className="text-sm font-semibold tracking-wide">WWM GvG Timers</h1>
-        <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' }}>
-          <span className="text-[10px] text-white/60">Ctrl+Shift+T</span>
-          <button
-            onClick={() => window.api?.hideOverlay?.() || window.close()}
-            className="w-6 h-6 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+        <div
+          ref={overlayContentRef}
+          className="w-full bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl text-white overflow-hidden flex flex-col"
+        >
+          <div
+            className="px-3 py-2 bg-black/90 flex items-center justify-between border-b border-white/10 cursor-move"
+            style={{ WebkitAppRegion: 'drag' }}
           >
-            X
-          </button>
+            <h1 className="text-sm font-semibold tracking-wide">WWM GvG Timers</h1>
+            <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' }}>
+              <span className="text-[10px] text-white/60">Ctrl+Shift+T</span>
+              <button
+                onClick={() => window.api?.hideOverlay?.() || window.close()}
+                className="w-6 h-6 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+              >
+                X
+              </button>
+            </div>
+          </div>
+
+          {!isConfigured ? (
+            <InitialSetupScreen
+              setup={setup}
+              setupError={setupError}
+              onSetupChange={(field, value) => setSetup((prev) => ({ ...prev, [field]: value }))}
+              onToggleGear={toggleGear}
+              onSubmitSetup={submitSetup}
+              onResetSetup={resetSetup}
+            />
+          ) : (
+            <GvgStatusGate
+              mode={setup.mode}
+              serverUrl={serverUrl}
+              postHeaders={postHeaders}
+              onGvgRunningChange={setGvgRunning}
+              onGvgScopeChange={setGvgScope}
+              onStatusChange={applyStatusTimers}
+              onOpenSettings={() => {
+                setIsConfigured(false)
+                setGvgRunning(false)
+                setGvgScope(null)
+              }}
+            >
+              <TeamTimers
+                timers={timers}
+                gvgScope={gvgScope}
+                serverUrl={serverUrl}
+                postHeaders={postHeaders}
+                isCommander={isCommander}
+                onOpenSettings={() => {
+                  setIsConfigured(false)
+                  setGvgRunning(false)
+                  setGvgScope(null)
+                }}
+              />
+            </GvgStatusGate>
+          )}
         </div>
       </div>
-
-      {!isConfigured ? (
-        <InitialSetupScreen
-          setup={setup}
-          setupError={setupError}
-          onSetupChange={(field, value) => setSetup((prev) => ({ ...prev, [field]: value }))}
-          onToggleGear={toggleGear}
-          onSubmitSetup={submitSetup}
-          onResetSetup={resetSetup}
-        />
-      ) : (
-        <GvgStatusGate
-          mode={setup.mode}
-          serverUrl={serverUrl}
-          postHeaders={postHeaders}
-          onGvgRunningChange={setGvgRunning}
-          onGvgScopeChange={setGvgScope}
-          onStatusChange={applyStatusTimers}
-          onOpenSettings={() => {
-            setIsConfigured(false)
-            setGvgRunning(false)
-            setGvgScope(null)
-          }}
-        >
-          <TeamTimers
-            timers={timers}
-            gvgScope={gvgScope}
-            serverUrl={serverUrl}
-            postHeaders={postHeaders}
-            isCommander={isCommander}
-            onOpenSettings={() => {
-              setIsConfigured(false)
-              setGvgRunning(false)
-              setGvgScope(null)
-            }}
-          />
-        </GvgStatusGate>
-      )}
     </div>
   )
 }

@@ -1,0 +1,97 @@
+import { useEffect, useState } from 'react'
+import { resetCommanderBuff } from '../services/serverApi'
+
+function CommanderHealcut({ gvgScope, serverUrl, postHeaders }) {
+  const statusValue = Number(gvgScope?.commanderCooldowns?.healcut)
+  const hasValue = Number.isFinite(statusValue)
+  const uptimeValue = Number(gvgScope?.commanderCooldownConfig?.healcut?.uptime)
+  const cooldownValue = Number(gvgScope?.commanderCooldownConfig?.healcut?.cooldown)
+  const hasConfig = Number.isFinite(uptimeValue) && Number.isFinite(cooldownValue)
+  const [remaining, setRemaining] = useState(0)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState('')
+
+  const formatTime = (seconds) => {
+    const min = Math.floor(seconds / 60)
+    const sec = seconds % 60
+    return `${min}:${sec < 10 ? '0' : ''}${sec}`
+  }
+
+  useEffect(() => {
+    if (!hasValue) {
+      setRemaining(0)
+      return
+    }
+
+    setRemaining(Math.max(0, Math.floor(statusValue)))
+  }, [hasValue, statusValue])
+
+  useEffect(() => {
+    if (!hasValue || remaining <= 0) {
+      return undefined
+    }
+
+    const id = setInterval(() => {
+      setRemaining((prev) => Math.max(0, prev - 1))
+    }, 1000)
+
+    return () => clearInterval(id)
+  }, [hasValue, remaining])
+
+  const isReady = remaining <= 0
+  const activeThreshold = hasConfig ? cooldownValue - uptimeValue : Number.POSITIVE_INFINITY
+  const isBuffActive = hasConfig && remaining > activeThreshold
+  const borderColorClass = isBuffActive ? 'border-emerald-400/70' : 'border-white/10'
+  const labelColorClass = isBuffActive ? 'text-emerald-300' : 'text-white'
+  const timerColorClass = isBuffActive || isReady ? 'text-emerald-400' : 'text-white'
+
+  const onReset = async () => {
+    try {
+      setIsSubmitting(true)
+      setError('')
+      await resetCommanderBuff(serverUrl, 'healcut', postHeaders?.() ?? {})
+    } catch {
+      setError('Failed to reset Commander Healcut.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <>
+      <div
+        className={`bg-white/5 rounded-xl px-3 py-2 border flex items-center gap-2 ${borderColorClass}`}
+        style={{ WebkitAppRegion: 'no-drag' }}
+      >
+        <span className={`flex-1 text-sm font-medium truncate ${labelColorClass}`}>Commander Healcut</span>
+        <button
+          onClick={onReset}
+          disabled={isSubmitting}
+          className="w-8 h-8 shrink-0 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-lg transition-colors disabled:opacity-50"
+          aria-label="Reset Commander Healcut"
+          title="Reset and start"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            className="w-4 h-4 text-white/80"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M3 12a9 9 0 1 0 3-6.7" />
+            <path d="M3 3v4h4" />
+          </svg>
+        </button>
+        <span className={`w-[88px] text-right font-mono text-2xl font-bold tabular-nums ${timerColorClass}`}>
+          {isReady ? 'READY' : formatTime(remaining)}
+        </span>
+      </div>
+      {error ? <div className="px-1 text-[11px] text-red-300">{error}</div> : null}
+    </>
+  )
+}
+
+export default CommanderHealcut

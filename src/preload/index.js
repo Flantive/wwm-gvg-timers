@@ -6,6 +6,9 @@ const api = {
   getServerUrl() {
     return ipcRenderer.invoke('overlay:get-server-url')
   },
+  httpRequest(config) {
+    return ipcRenderer.invoke('overlay:http-request', config)
+  },
   hideOverlay() {
     ipcRenderer.send('overlay:hide')
   },
@@ -22,11 +25,27 @@ const api = {
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('electron', electronAPI)
+  } catch (error) {
+    console.error(error)
+  }
+
+  try {
     contextBridge.exposeInMainWorld('api', api)
+  } catch (error) {
+    console.error(error)
+  }
+
+  try {
+    contextBridge.exposeInMainWorld('wwmBridge', {
+      httpRequest: api.httpRequest,
+    })
   } catch (error) {
     console.error(error)
   }
 } else {
   window.electron = electronAPI
   window.api = api
+  window.wwmBridge = {
+    httpRequest: api.httpRequest,
+  }
 }

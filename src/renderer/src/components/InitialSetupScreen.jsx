@@ -1,6 +1,7 @@
 const roleOptions = ['Commander', 'Member']
 const teamOptions = ['Offense', 'Defense']
 const gearOptions = ['Mo blade', 'Ink Fan', 'Heal Umbrella', 'Twin Blades']
+const sanitizeAlphaNum = (value) => value.replace(/[^a-zA-Z0-9]/g, '')
 
 function InitialSetupScreen({
   setup,
@@ -19,7 +20,9 @@ function InitialSetupScreen({
         <input
           type="text"
           value={setup.userName}
-          onChange={(event) => onSetupChange('userName', event.target.value)}
+          onChange={(event) => onSetupChange('userName', sanitizeAlphaNum(event.target.value))}
+          pattern="[A-Za-z0-9]*"
+          autoComplete="off"
           className="w-full px-3 py-2 text-sm bg-white/10 border border-white/20 rounded-lg outline-none focus:border-sky-400/70"
           placeholder="Enter your name"
         />
@@ -53,7 +56,9 @@ function InitialSetupScreen({
           <input
             type="text"
             value={setup.apiKey}
-            onChange={(event) => onSetupChange('apiKey', event.target.value)}
+            onChange={(event) => onSetupChange('apiKey', sanitizeAlphaNum(event.target.value))}
+            pattern="[A-Za-z0-9]*"
+            autoComplete="off"
             className="w-full px-3 py-2 text-sm bg-white/10 border border-white/20 rounded-lg outline-none focus:border-sky-400/70"
             placeholder="Paste API key for POST requests"
           />
@@ -82,8 +87,8 @@ function InitialSetupScreen({
         </div>
       </div>
 
-      <div className="bg-white/5 rounded-xl px-3 py-2 border border-white/10 space-y-2">
-        <div className="text-xs text-white/70">Pick 2 options</div>
+      <div className="hidden bg-white/5 rounded-xl px-3 py-2 border border-white/10 space-y-2">
+        <div className="text-xs text-white/70">Pick EX skills</div>
         <div className="grid grid-cols-3 gap-2">
           {gearOptions.map((gear) => {
             const selected = setup.selectedGear.includes(gear)

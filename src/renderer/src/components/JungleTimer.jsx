@@ -78,18 +78,20 @@ function JungleTimer({ gvgScope }) {
   const currentWindowStart = getCurrentWindowStart(localRemaining)
   const isBossChokingWindow = currentWindowStart === 1800 || currentWindowStart === 1200
   const timerLabel = isBossChokingWindow ? 'Chicken Choking' : jungleTimerName
+  const isDanger = countdown <= 30
   const timerColorClass =
     countdown > 60 ? 'text-white' : countdown > 30 ? 'text-sky-400' : 'text-red-400'
-  const borderColorClass = countdown <= 30 ? 'border-red-400' : 'border-white/10'
+  const borderColorClass = isDanger ? 'border-red-400' : 'border-white/10'
+  const labelColorClass = isBossChokingWindow && isDanger ? 'text-red-400' : 'text-white'
 
   return (
     <div
       className={`bg-white/5 rounded-xl px-3 py-2 border flex items-center gap-2 ${borderColorClass}`}
       style={{ WebkitAppRegion: 'no-drag' }}
     >
-      <span className="flex-1 text-sm font-medium truncate flex items-center gap-2">
+      <span className={`flex-1 text-sm font-medium truncate flex items-center gap-2 ${labelColorClass}`}>
         {timerLabel}
-        {isBossChokingWindow ? (
+        {isBossChokingWindow && countdown < 60 ? (
           <img src={chickenGif} alt="Chicken Choking" className="w-8 h-8 shrink-0 rounded-sm object-cover" />
         ) : null}
       </span>

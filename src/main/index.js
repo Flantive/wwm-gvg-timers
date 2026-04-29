@@ -88,9 +88,6 @@ app.whenReady().then(() => {
     }
   })
 
-  globalShortcut.register('Ctrl+Shift+R', () => {
-    overlayWindow?.webContents.send('reset-all-timers')
-  })
 })
 
 app.on('will-quit', () => {

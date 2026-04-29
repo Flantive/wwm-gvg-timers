@@ -41,11 +41,12 @@ export async function requestThroughBridge(config) {
   )
 }
 
-export async function fetchTimers(serverUrl) {
+export async function fetchTimers(serverUrl, headers) {
   const endpoint = '/timers'
   const response = await requestThroughBridge({
     url: `${serverUrl}${endpoint}`,
     method: 'GET',
+    headers,
   })
 
   if (!response.ok) {
@@ -93,11 +94,12 @@ export async function resetAllTimers(serverUrl, headers) {
   return payload.timers
 }
 
-export async function fetchGvgStatus(serverUrl) {
+export async function fetchGvgStatus(serverUrl, headers) {
   const endpoint = '/wwmapi/status'
   const response = await requestThroughBridge({
     url: `${serverUrl}${endpoint}`,
     method: 'GET',
+    headers,
   })
 
   if (!response.ok) {
@@ -140,6 +142,19 @@ export async function resetCommanderBuff(serverUrl, field, headers) {
       ...headers,
     },
     body: JSON.stringify({ field }),
+  })
+
+  if (!response.ok) {
+    throw new Error(buildHttpError(response, endpoint))
+  }
+}
+
+export async function resetGvg(serverUrl, headers) {
+  const endpoint = '/wwmapi/resetGvg'
+  const response = await requestThroughBridge({
+    url: `${serverUrl}${endpoint}`,
+    method: 'POST',
+    headers,
   })
 
   if (!response.ok) {

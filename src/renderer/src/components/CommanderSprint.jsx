@@ -1,16 +1,16 @@
 import CommanderBuffTimer from './CommanderBuffTimer'
 
-function CommanderHealcut({ gvgScope, serverUrl, postHeaders, canReset }) {
+function CommanderSprint({ gvgScope, serverUrl, postHeaders, canReset }) {
   return (
     <CommanderBuffTimer
       gvgScope={gvgScope}
       serverUrl={serverUrl}
       postHeaders={postHeaders}
-      buffField="healcut"
-      label="Commander: Healcut"
+      buffField="sprint"
+      label="Commander: Sprint"
       canReset={canReset}
     />
   )
 }
 
-export default CommanderHealcut
+export default CommanderSprint

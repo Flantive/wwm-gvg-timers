@@ -68,7 +68,7 @@ function App() {
   const TeamTimers = setup.team === 'Defense' ? DefenseTimers : OffenseTimers
   const canContinue =
     setup.userName.trim().length > 0 &&
-    setup.selectedGear.length === 2 &&
+    setup.selectedGear.length <= 2 &&
     (!isCommander || setup.apiKey.trim().length > 0)
 
   useEffect(() => {
@@ -104,13 +104,20 @@ function App() {
 
   const postHeaders = useCallback(() => {
     const headers = {}
+    const trimmedUserName = setup.userName.trim()
+
+    if (trimmedUserName) {
+      headers.userName = trimmedUserName
+    }
+
+    headers.team = setup.team
 
     if (isCommander && setup.apiKey.trim()) {
       headers['X-API-Key'] = setup.apiKey.trim()
     }
 
     return headers
-  }, [isCommander, setup.apiKey])
+  }, [isCommander, setup.apiKey, setup.team, setup.userName])
 
   const toggleGear = (gear) => {
     setSetup((prev) => {
@@ -128,7 +135,7 @@ function App() {
 
   const submitSetup = () => {
     if (!canContinue) {
-      setSetupError('Fill all required fields and pick exactly 2 options.')
+      setSetupError('Fill all required fields.')
       return
     }
 
@@ -152,13 +159,15 @@ function App() {
         style={{ WebkitAppRegion: 'drag' }}
       >
         <h1 className="text-sm font-semibold tracking-wide">WWM GvG Timers</h1>
-        <button
-          onClick={() => window.api?.hideOverlay?.() || window.close()}
-          className="w-6 h-6 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-          style={{ WebkitAppRegion: 'no-drag' }}
-        >
-          X
-        </button>
+        <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' }}>
+          <span className="text-[10px] text-white/60">Ctrl+Shift+T</span>
+          <button
+            onClick={() => window.api?.hideOverlay?.() || window.close()}
+            className="w-6 h-6 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+          >
+            X
+          </button>
+        </div>
       </div>
 
       {!isConfigured ? (
@@ -189,6 +198,7 @@ function App() {
             gvgScope={gvgScope}
             serverUrl={fixedServerUrl}
             postHeaders={postHeaders}
+            isCommander={isCommander}
             onOpenSettings={() => {
               setIsConfigured(false)
               setGvgRunning(false)

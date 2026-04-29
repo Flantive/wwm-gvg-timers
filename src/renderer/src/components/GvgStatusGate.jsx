@@ -20,14 +20,14 @@ function GvgStatusGate({
   const pollingRef = useRef(null)
 
   const refreshStatus = useCallback(async () => {
-    const status = await fetchGvgStatus(serverUrl)
+    const status = await fetchGvgStatus(serverUrl, postHeaders?.() ?? {})
     setGvgRunning(status.gvgRunning)
     onGvgRunningChange(status.gvgRunning)
     onGvgScopeChange?.(status.gvgScope)
     onStatusChange?.(status)
     setStatusError('')
     return status
-  }, [onGvgRunningChange, onGvgScopeChange, onStatusChange, serverUrl])
+  }, [onGvgRunningChange, onGvgScopeChange, onStatusChange, postHeaders, serverUrl])
 
   useEffect(() => {
     let active = true
@@ -41,13 +41,22 @@ function GvgStatusGate({
         }
       }
 
+      if (!active) {
+        return
+      }
+
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
+        pollingRef.current = null
+      }
+
       pollingRef.current = setInterval(() => {
         refreshStatus().catch((error) => {
           if (active) {
             setStatusError(error instanceof Error ? error.message : 'Syncing error: failed to fetch GvG status.')
           }
         })
-      }, 5000)
+      }, 2000)
     }
 
     startPolling()

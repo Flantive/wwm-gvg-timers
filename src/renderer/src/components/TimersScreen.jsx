@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { resetAllTimers } from '../services/serverApi'
+import { resetGvg } from '../services/serverApi'
 
 function TimersScreen({
   gvgScope,
   serverUrl,
   postHeaders,
+  isCommander,
   onOpenSettings,
   children,
 }) {
@@ -16,6 +17,8 @@ function TimersScreen({
 
   const [gvgRemaining, setGvgRemaining] = useState(0)
   const [syncError, setSyncError] = useState('')
+  const [resetPhase, setResetPhase] = useState('idle')
+  const [countdownValue, setCountdownValue] = useState(3)
   const hasGvgTimer = Number.isFinite(gvgScope?.timeRemaining)
 
   useEffect(() => {
@@ -39,6 +42,34 @@ function TimersScreen({
     return () => clearInterval(id)
   }, [gvgRemaining, hasGvgTimer])
 
+  useEffect(() => {
+    if (resetPhase !== 'countdown') {
+      return undefined
+    }
+
+    const id = setTimeout(() => {
+      if (countdownValue <= 0) {
+        setResetPhase('confirm')
+      } else {
+        setCountdownValue((prev) => prev - 1)
+      }
+    }, 1000)
+
+    return () => clearTimeout(id)
+  }, [countdownValue, resetPhase])
+
+  useEffect(() => {
+    if (resetPhase !== 'confirm') {
+      return undefined
+    }
+
+    const id = setTimeout(() => {
+      setResetPhase('idle')
+    }, 5000)
+
+    return () => clearTimeout(id)
+  }, [resetPhase])
+
   const gvgTopLabel = useMemo(() => {
     if (!hasGvgTimer || gvgRemaining <= 0) {
       return 'READY'
@@ -47,12 +78,24 @@ function TimersScreen({
     return formatTime(gvgRemaining)
   }, [gvgRemaining, hasGvgTimer])
 
-  const resetAllFromServer = async () => {
+  const resetGvgFromServer = async () => {
+    if (resetPhase === 'idle') {
+      setCountdownValue(3)
+      setResetPhase('countdown')
+      return
+    }
+
+    if (resetPhase !== 'confirm') {
+      return
+    }
+
     try {
-      await resetAllTimers(serverUrl, postHeaders?.() ?? {})
+      await resetGvg(serverUrl, postHeaders?.() ?? {})
       setSyncError('')
+      setResetPhase('idle')
     } catch {
-      setSyncError('Syncing error: failed to reset all timers.')
+      setSyncError('Syncing error: failed to reset GvG.')
+      setResetPhase('idle')
     }
   }
 
@@ -82,7 +125,7 @@ function TimersScreen({
       </div>
 
       <div
-        className="p-3 border-t border-white/10 flex items-center justify-between"
+        className={`p-3 border-t border-white/10 flex items-center ${isCommander ? 'justify-between' : 'justify-start'}`}
         style={{ WebkitAppRegion: 'no-drag' }}
       >
         <button
@@ -105,12 +148,22 @@ function TimersScreen({
             <circle cx="12" cy="12" r="2.6" />
           </svg>
         </button>
-        <button
-          onClick={resetAllFromServer}
-          className="px-3 py-1.5 text-xs font-semibold text-red-400 bg-transparent border border-red-500/50 rounded-lg hover:bg-red-500/10 transition-colors"
-        >
-          Reset GvG
-        </button>
+        {isCommander ? (
+          <button
+            onClick={resetGvgFromServer}
+            className={`px-3 py-1.5 text-xs font-semibold bg-transparent border rounded-lg transition-colors ${
+              resetPhase === 'confirm'
+                ? 'text-red-200 border-red-400 hover:bg-red-500/20'
+                : 'text-red-400 border-red-500/50 hover:bg-red-500/10'
+            }`}
+          >
+            {resetPhase === 'countdown'
+              ? `Confirm in ${countdownValue}`
+              : resetPhase === 'confirm'
+                ? 'Confirm Reset'
+                : 'Reset GvG'}
+          </button>
+        ) : null}
       </div>
     </>
   )

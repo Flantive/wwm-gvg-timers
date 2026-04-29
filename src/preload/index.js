@@ -12,11 +12,6 @@ const api = {
   hideOverlay() {
     ipcRenderer.send('overlay:hide')
   },
-  onResetAllTimers(callback) {
-    const listener = () => callback()
-    ipcRenderer.on('reset-all-timers', listener)
-    return () => ipcRenderer.removeListener('reset-all-timers', listener)
-  },
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

@@ -41,59 +41,6 @@ export async function requestThroughBridge(config) {
   )
 }
 
-export async function fetchTimers(serverUrl, headers) {
-  const endpoint = '/timers'
-  const response = await requestThroughBridge({
-    url: `${serverUrl}${endpoint}`,
-    method: 'GET',
-    headers,
-  })
-
-  if (!response.ok) {
-    throw new Error(buildHttpError(response, endpoint))
-  }
-
-  const payload = parseJsonBody(response, endpoint)
-  if (!payload || !Array.isArray(payload.timers)) {
-    throw new Error('Invalid timer payload')
-  }
-
-  return payload.timers
-}
-
-export async function resetTimer(serverUrl, timerId, headers) {
-  const endpoint = `/timers/${timerId}/reset`
-  const response = await requestThroughBridge({
-    url: `${serverUrl}${endpoint}`,
-    method: 'POST',
-    headers,
-  })
-
-  if (!response.ok) {
-    throw new Error(buildHttpError(response, endpoint))
-  }
-}
-
-export async function resetAllTimers(serverUrl, headers) {
-  const endpoint = '/timers/reset-all'
-  const response = await requestThroughBridge({
-    url: `${serverUrl}${endpoint}`,
-    method: 'POST',
-    headers,
-  })
-
-  if (!response.ok) {
-    throw new Error(buildHttpError(response, endpoint))
-  }
-
-  const payload = parseJsonBody(response, endpoint)
-  if (!payload || !Array.isArray(payload.timers)) {
-    throw new Error('Invalid reset-all payload')
-  }
-
-  return payload.timers
-}
-
 export async function fetchGvgStatus(serverUrl, headers) {
   const endpoint = '/wwmapi/status'
   const response = await requestThroughBridge({

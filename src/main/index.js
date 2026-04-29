@@ -1,10 +1,11 @@
-import { app, BrowserWindow, globalShortcut, ipcMain } from 'electron'
+import { app, BrowserWindow, globalShortcut, ipcMain, Menu, Tray } from 'electron'
 import fs from 'node:fs'
 import path from 'path'
 
-const remoteServerUrl = 'http://1.1.1.1/wwmapi'
+const remoteServerUrl = 'http://217.182.78.238:3333'
 
 let overlayWindow
+let tray
 
 function resolvePreloadPath() {
   const candidates = [
@@ -23,9 +24,60 @@ function resolvePreloadPath() {
   return candidates[0]
 }
 
+function resolveRendererPath() {
+  const candidates = [
+    path.join(__dirname, '../renderer/index.html'),
+    path.join(__dirname, '../dist/index.html'),
+    path.join(app.getAppPath(), 'out/renderer/index.html'),
+    path.join(process.cwd(), 'out/renderer/index.html'),
+    path.join(app.getAppPath(), 'src/renderer/index.html'),
+  ]
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate
+    }
+  }
+
+  return candidates[0]
+}
+
+function resolveTrayIconPath() {
+  const candidates = [
+    path.join(process.resourcesPath, 'app.asar.unpacked/resources/icon.png'),
+    path.join(process.resourcesPath, 'app.asar.unpacked/build/icon.png'),
+    path.join(app.getAppPath(), 'resources/icon.png'),
+    path.join(process.cwd(), 'resources/icon.png'),
+    path.join(process.cwd(), 'build/icon.png'),
+  ]
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate
+    }
+  }
+
+  return candidates[candidates.length - 1]
+}
+
+function toggleOverlayVisibility() {
+  if (!overlayWindow) {
+    return
+  }
+
+  if (overlayWindow.isVisible()) {
+    overlayWindow.hide()
+  } else {
+    overlayWindow.show()
+    overlayWindow.focus()
+  }
+}
+
 function createWindow() {
   const preloadPath = resolvePreloadPath()
+  const rendererPath = resolveRendererPath()
   console.log(`[wwm] using preload: ${preloadPath}`)
+  console.log(`[wwm] using renderer: ${rendererPath}`)
 
   overlayWindow = new BrowserWindow({
     width: 380,
@@ -37,7 +89,7 @@ function createWindow() {
     alwaysOnTop: true,
     hasShadow: false,
     resizable: false,
-    skipTaskbar: true,
+    skipTaskbar: !app.isPackaged,
     webPreferences: {
       preload: preloadPath,
       nodeIntegration: false,
@@ -49,7 +101,7 @@ function createWindow() {
   if (process.env.NODE_ENV === 'development') {
     overlayWindow.loadURL('http://localhost:5173')
   } else {
-    overlayWindow.loadFile(path.join(__dirname, '../dist/index.html'))
+    overlayWindow.loadFile(rendererPath)
   }
 
   overlayWindow.setAlwaysOnTop(true, 'screen-saver')
@@ -57,7 +109,27 @@ function createWindow() {
   overlayWindow.setIgnoreMouseEvents(false)
 }
 
-ipcMain.handle('overlay:get-server-url', () => remoteServerUrl)
+function createTray() {
+  const trayIconPath = resolveTrayIconPath()
+  tray = new Tray(trayIconPath)
+  tray.setToolTip('WWM GvG Timers')
+  tray.on('click', () => toggleOverlayVisibility())
+
+  const menu = Menu.buildFromTemplate([
+    {
+      label: 'Show/Hide Overlay',
+      click: () => toggleOverlayVisibility(),
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit',
+      click: () => app.quit(),
+    },
+  ])
+
+  tray.setContextMenu(menu)
+}
+
 ipcMain.handle('overlay:http-request', async (_event, requestConfig) => {
   const config = requestConfig ?? {}
   const response = await fetch(config.url, {
@@ -74,6 +146,7 @@ ipcMain.handle('overlay:http-request', async (_event, requestConfig) => {
     bodyText,
   }
 })
+ipcMain.handle('overlay:get-server-url', () => remoteServerUrl)
 
 ipcMain.on('overlay:hide', () => {
   overlayWindow?.hide()
@@ -81,13 +154,11 @@ ipcMain.on('overlay:hide', () => {
 
 app.whenReady().then(() => {
   createWindow()
+  createTray()
 
   globalShortcut.register('Ctrl+Shift+T', () => {
-    if (overlayWindow) {
-      overlayWindow.isVisible() ? overlayWindow.hide() : overlayWindow.show()
-    }
+    toggleOverlayVisibility()
   })
-
 })
 
 app.on('will-quit', () => {

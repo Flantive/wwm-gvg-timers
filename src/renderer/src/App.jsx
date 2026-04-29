@@ -10,7 +10,7 @@ const initialTimers = [
   // { id: 3, name: 'Buff / Buff Cooldown', duration: 90, remaining: 90, isRunning: false },
   // { id: 4, name: 'Tower Push Timer', duration: 240, remaining: 240, isRunning: false },
 ]
-const fixedServerUrl = 'http://localhost:3333'
+const defaultServerUrl = 'http://217.182.78.238:3333'
 
 const setupStorageKey = 'wwm-overlay-setup'
 const defaultSetup = {
@@ -60,6 +60,7 @@ function App() {
   const [timers, setTimers] = useState(initialTimers)
   const [, setGvgRunning] = useState(false)
   const [gvgScope, setGvgScope] = useState(null)
+  const [serverUrl, setServerUrl] = useState(defaultServerUrl)
   const [isConfigured, setIsConfigured] = useState(() => loadSavedSetup().isConfigured)
   const [setupError, setSetupError] = useState('')
   const [setup, setSetup] = useState(() => loadSavedSetup().setup)
@@ -84,6 +85,23 @@ function App() {
       })
     )
   }, [setup, isConfigured])
+
+  useEffect(() => {
+    let active = true
+
+    window.api
+      ?.getServerUrl?.()
+      .then((url) => {
+        if (active && typeof url === 'string' && url.trim()) {
+          setServerUrl(url)
+        }
+      })
+      .catch(() => {})
+
+    return () => {
+      active = false
+    }
+  }, [])
 
   const applyStatusTimers = useCallback((status) => {
     if (!status) {
@@ -182,7 +200,7 @@ function App() {
       ) : (
         <GvgStatusGate
           mode={setup.mode}
-          serverUrl={fixedServerUrl}
+          serverUrl={serverUrl}
           postHeaders={postHeaders}
           onGvgRunningChange={setGvgRunning}
           onGvgScopeChange={setGvgScope}
@@ -196,7 +214,7 @@ function App() {
           <TeamTimers
             timers={timers}
             gvgScope={gvgScope}
-            serverUrl={fixedServerUrl}
+            serverUrl={serverUrl}
             postHeaders={postHeaders}
             isCommander={isCommander}
             onOpenSettings={() => {

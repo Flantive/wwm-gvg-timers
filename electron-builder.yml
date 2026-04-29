@@ -1,5 +1,5 @@
-appId: com.electron.app
-productName: wwm-gvg-timers
+appId: com.wwm.gvg.timers
+productName: WWM GvG Timers
 directories:
   buildResources: build
 files:
@@ -11,12 +11,11 @@ files:
 asarUnpack:
   - resources/**
 win:
-  executableName: wwm-gvg-timers
-nsis:
-  artifactName: ${name}-${version}-setup.${ext}
-  shortcutName: ${productName}
-  uninstallDisplayName: ${productName}
-  createDesktopShortcut: always
+  executableName: WWM-GvG-Timers
+  target:
+    - portable
+portable:
+  artifactName: ${name}-${version}-portable.${ext}
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:

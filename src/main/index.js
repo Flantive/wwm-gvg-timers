@@ -82,16 +82,14 @@ function createWindow() {
   overlayWindow = new BrowserWindow({
     width: 380,
     height: 630,
-    x: 1400,
-    y: 100,
+    center: true,
     frame: false,
     transparent: true,
     alwaysOnTop: true,
     hasShadow: false,
     resizable: true,
     minWidth: 260,
-    minHeight: 630,
-    maxHeight: 630,
+    minHeight: 240,
     skipTaskbar: !app.isPackaged,
     webPreferences: {
       preload: preloadPath,
@@ -106,12 +104,6 @@ function createWindow() {
   } else {
     overlayWindow.loadFile(rendererPath)
   }
-
-  overlayWindow.on('will-resize', (event, _newBounds, details) => {
-    if (details?.edge !== 'right') {
-      event.preventDefault()
-    }
-  })
 
   overlayWindow.setAlwaysOnTop(true, 'screen-saver')
   overlayWindow.setVisibleOnAllWorkspaces(true)
@@ -156,6 +148,20 @@ ipcMain.handle('overlay:http-request', async (_event, requestConfig) => {
   }
 })
 ipcMain.handle('overlay:get-server-url', () => remoteServerUrl)
+ipcMain.on('overlay:set-height', (_event, nextHeight) => {
+  if (!overlayWindow || overlayWindow.isDestroyed()) {
+    return
+  }
+
+  const parsedHeight = Number(nextHeight)
+  if (!Number.isFinite(parsedHeight)) {
+    return
+  }
+
+  const clampedHeight = Math.max(240, Math.min(Math.ceil(parsedHeight), 2000))
+  const [currentWidth] = overlayWindow.getSize()
+  overlayWindow.setSize(currentWidth, clampedHeight, false)
+})
 
 ipcMain.on('overlay:hide', () => {
   overlayWindow?.hide()

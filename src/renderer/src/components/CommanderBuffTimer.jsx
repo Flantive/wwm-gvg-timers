@@ -41,6 +41,7 @@ function CommanderBuffTimer({ gvgScope, serverUrl, postHeaders, buffField, label
   const isReady = remaining <= 0
   const activeThreshold = hasConfig ? cooldownValue - uptimeValue : Number.POSITIVE_INFINITY
   const isBuffActive = hasConfig && remaining > activeThreshold
+  const backgroundClass = isBuffActive ? 'bg-emerald-900' : 'bg-white/5'
   const borderColorClass = isBuffActive ? 'border-emerald-400/70' : 'border-white/10'
   const labelColorClass = isBuffActive ? 'text-emerald-300' : 'text-white'
   const timerColorClass = isBuffActive || isReady ? 'text-emerald-400' : 'text-white'
@@ -60,7 +61,7 @@ function CommanderBuffTimer({ gvgScope, serverUrl, postHeaders, buffField, label
   return (
     <>
       <div
-        className={`bg-white/5 rounded-xl px-3 py-2 border flex items-center gap-2 ${borderColorClass}`}
+        className={`${backgroundClass} rounded-xl px-3 py-2 border flex items-center gap-2 ${borderColorClass}`}
         style={{ WebkitAppRegion: 'no-drag' }}
       >
         <span className={`flex-1 text-sm font-medium truncate ${labelColorClass}`}>{label}</span>

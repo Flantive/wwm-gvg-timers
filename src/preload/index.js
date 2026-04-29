@@ -9,6 +9,9 @@ const api = {
   httpRequest(config) {
     return ipcRenderer.invoke('overlay:http-request', config)
   },
+  setOverlayHeight(height) {
+    ipcRenderer.send('overlay:set-height', height)
+  },
   hideOverlay() {
     ipcRenderer.send('overlay:hide')
   },

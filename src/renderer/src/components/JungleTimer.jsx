@@ -79,14 +79,16 @@ function JungleTimer({ gvgScope }) {
   const isBossChokingWindow = currentWindowStart === 1800 || currentWindowStart === 1200
   const timerLabel = isBossChokingWindow ? 'Chicken Choking' : jungleTimerName
   const isDanger = countdown <= 30
+  const isBlueWarning = countdown <= 60 && countdown > 30
   const timerColorClass =
     countdown > 60 ? 'text-white' : countdown > 30 ? 'text-sky-400' : 'text-red-400'
-  const borderColorClass = isDanger ? 'border-red-400' : 'border-white/10'
+  const borderColorClass = isDanger ? 'border-red-400' : isBlueWarning ? 'border-sky-400' : 'border-white/10'
   const labelColorClass = isBossChokingWindow && isDanger ? 'text-red-400' : 'text-white'
+  const backgroundClass = isDanger ? 'bg-red-950' : isBlueWarning ? 'bg-zinc-900' : 'bg-white/5'
 
   return (
     <div
-      className={`bg-white/5 rounded-xl px-3 py-2 border flex items-center gap-2 ${borderColorClass}`}
+      className={`${backgroundClass} rounded-xl px-3 py-2 border flex items-center gap-2 ${borderColorClass}`}
       style={{ WebkitAppRegion: 'no-drag' }}
     >
       <span className={`flex-1 text-sm font-medium truncate flex items-center gap-2 ${labelColorClass}`}>

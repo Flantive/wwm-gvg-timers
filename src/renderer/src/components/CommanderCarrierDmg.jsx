@@ -1,6 +1,6 @@
 import CommanderBuffTimer from './CommanderBuffTimer'
 
-function CommanderCarrierDmg({ gvgScope, serverUrl, postHeaders, canReset }) {
+function CommanderCarrierDmg({ gvgScope, serverUrl, postHeaders, canReset, onResetSuccess, compact }) {
   return (
     <CommanderBuffTimer
       gvgScope={gvgScope}
@@ -8,7 +8,10 @@ function CommanderCarrierDmg({ gvgScope, serverUrl, postHeaders, canReset }) {
       postHeaders={postHeaders}
       buffField="carrierdmg"
       label="Commander: Carrier DMG"
+      compactLabel="Carrier DMG"
+      compact={compact}
       canReset={canReset}
+      onResetSuccess={onResetSuccess}
     />
   )
 }

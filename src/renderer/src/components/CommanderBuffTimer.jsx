@@ -1,7 +1,17 @@
 import { useEffect, useState } from 'react'
 import { resetCommanderBuff } from '../services/serverApi'
 
-function CommanderBuffTimer({ gvgScope, serverUrl, postHeaders, buffField, label, canReset }) {
+function CommanderBuffTimer({
+  gvgScope,
+  serverUrl,
+  postHeaders,
+  buffField,
+  label,
+  compactLabel,
+  compact,
+  canReset,
+  onResetSuccess,
+}) {
   const statusValue = Number(gvgScope?.commanderCooldowns?.[buffField])
   const hasValue = Number.isFinite(statusValue)
   const uptimeValue = Number(gvgScope?.commanderCooldownConfig?.[buffField]?.uptime)
@@ -51,6 +61,7 @@ function CommanderBuffTimer({ gvgScope, serverUrl, postHeaders, buffField, label
       setIsSubmitting(true)
       setError('')
       await resetCommanderBuff(serverUrl, buffField, postHeaders?.() ?? {})
+      onResetSuccess?.()
     } catch {
       setError(`Failed to reset ${label}.`)
     } finally {
@@ -60,38 +71,77 @@ function CommanderBuffTimer({ gvgScope, serverUrl, postHeaders, buffField, label
 
   return (
     <>
-      <div
-        className={`${backgroundClass} rounded-xl px-3 py-2 border flex items-center gap-2 ${borderColorClass}`}
-        style={{ WebkitAppRegion: 'no-drag' }}
-      >
-        <span className={`flex-1 text-sm font-medium truncate ${labelColorClass}`}>{label}</span>
-        {isReady && canReset ? (
-          <button
-            onClick={onReset}
-            disabled={isSubmitting}
-            className="w-8 h-8 shrink-0 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-lg transition-colors disabled:opacity-50"
-            aria-label={`Reset ${label}`}
-            title="Reset and start"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="w-4 h-4 text-white/80"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+      {compact ? (
+        <div
+          className={`${backgroundClass} rounded-xl px-2.5 py-2 border space-y-1 ${borderColorClass}`}
+          style={{ WebkitAppRegion: 'no-drag' }}
+        >
+          <div className={`text-[11px] font-semibold truncate ${labelColorClass}`}>
+            {compactLabel || label}
+          </div>
+          <div className="flex items-center justify-between gap-1">
+            <span className={`text-base font-mono font-bold tabular-nums ${timerColorClass}`}>
+              {isReady ? 'READY' : formatTime(remaining)}
+            </span>
+            {isReady && canReset ? (
+              <button
+                onClick={onReset}
+                disabled={isSubmitting}
+                className="w-6 h-6 shrink-0 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-md transition-colors disabled:opacity-50"
+                aria-label={`Reset ${label}`}
+                title="Reset and start"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="w-3.5 h-3.5 text-white/80"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3 12a9 9 0 1 0 3-6.7" />
+                  <path d="M3 3v4h4" />
+                </svg>
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        <div
+          className={`${backgroundClass} rounded-xl px-3 py-2 border flex items-center gap-2 ${borderColorClass}`}
+          style={{ WebkitAppRegion: 'no-drag' }}
+        >
+          <span className={`flex-1 text-sm font-medium truncate ${labelColorClass}`}>{label}</span>
+          {isReady && canReset ? (
+            <button
+              onClick={onReset}
+              disabled={isSubmitting}
+              className="w-8 h-8 shrink-0 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-lg transition-colors disabled:opacity-50"
+              aria-label={`Reset ${label}`}
+              title="Reset and start"
             >
-              <path d="M3 12a9 9 0 1 0 3-6.7" />
-              <path d="M3 3v4h4" />
-            </svg>
-          </button>
-        ) : null}
-        <span className={`w-[88px] text-right font-mono text-2xl font-bold tabular-nums ${timerColorClass}`}>
-          {isReady ? 'READY' : formatTime(remaining)}
-        </span>
-      </div>
+              <svg
+                viewBox="0 0 24 24"
+                className="w-4 h-4 text-white/80"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M3 12a9 9 0 1 0 3-6.7" />
+                <path d="M3 3v4h4" />
+              </svg>
+            </button>
+          ) : null}
+          <span className={`w-[88px] text-right font-mono text-2xl font-bold tabular-nums ${timerColorClass}`}>
+            {isReady ? 'READY' : formatTime(remaining)}
+          </span>
+        </div>
+      )}
       {error ? <div className="px-1 text-[11px] text-red-300">{error}</div> : null}
     </>
   )

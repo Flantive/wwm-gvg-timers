@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import chickenGif from '../assets/chicken.gif'
+import { speakWithPreferredVoice } from '../services/tts'
 
 const jungleTimerName = 'Jungle Respawn'
 const jungleBreakpoints = [1800, 1500, 1200, 900, 600, 300, 0]
@@ -8,6 +9,7 @@ function JungleTimer({ gvgScope }) {
   const totalRemaining = Number(gvgScope?.timeRemaining)
   const hasScopeTime = Number.isFinite(totalRemaining)
   const [localRemaining, setLocalRemaining] = useState(0)
+  const prevCountdownRef = useRef(null)
 
   const formatTime = (seconds) => {
     const min = Math.floor(seconds / 60)
@@ -76,8 +78,10 @@ function JungleTimer({ gvgScope }) {
 
   const countdown = getJungleCountdown(localRemaining)
   const currentWindowStart = getCurrentWindowStart(localRemaining)
-  const isBossChokingWindow = currentWindowStart === 1800 || currentWindowStart === 1200
-  const timerLabel = isBossChokingWindow ? 'Chicken Choking' : jungleTimerName
+  const isPreThirtyWindow = localRemaining > 1800
+  const isBossChokingWindow =
+    !isPreThirtyWindow && (currentWindowStart === 1800 || currentWindowStart === 1200)
+  const timerLabel = isPreThirtyWindow ? 'Game Start' : isBossChokingWindow ? 'Chicken Choking' : jungleTimerName
   const isDanger = countdown <= 30
   const isBlueWarning = countdown <= 60 && countdown > 30
   const timerColorClass =
@@ -85,6 +89,39 @@ function JungleTimer({ gvgScope }) {
   const borderColorClass = isDanger ? 'border-red-400' : isBlueWarning ? 'border-sky-400' : 'border-white/10'
   const labelColorClass = isBossChokingWindow && isDanger ? 'text-red-400' : 'text-white'
   const backgroundClass = isDanger ? 'bg-red-950' : isBlueWarning ? 'bg-zinc-900' : 'bg-white/5'
+  const minuteCallout = isPreThirtyWindow
+    ? 'Game starting in 1 minute'
+    : isBossChokingWindow
+      ? 'Boss in 1 minute'
+      : 'Jungle in 1 minute'
+  const thirtySecondCallout = isPreThirtyWindow
+    ? 'Game starting in 30 seconds'
+    : isBossChokingWindow
+      ? 'Boss in 30 seconds'
+      : 'Jungle in 30 seconds'
+
+  useEffect(() => {
+    const previous = prevCountdownRef.current
+    const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window
+
+    if (!Number.isFinite(previous) || !canSpeak) {
+      prevCountdownRef.current = countdown
+      return
+    }
+
+    const crossedMinute = previous > 60 && countdown <= 60
+    const crossedThirty = previous > 30 && countdown <= 30
+
+    if (crossedMinute) {
+      speakWithPreferredVoice(minuteCallout)
+    }
+
+    if (crossedThirty) {
+      speakWithPreferredVoice(thirtySecondCallout)
+    }
+
+    prevCountdownRef.current = countdown
+  }, [countdown, minuteCallout, thirtySecondCallout])
 
   return (
     <div

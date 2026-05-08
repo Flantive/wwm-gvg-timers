@@ -5,6 +5,7 @@ function GvgStatusGate({
   mode,
   serverUrl,
   postHeaders,
+  refreshSeq,
   onGvgRunningChange,
   onGvgScopeChange,
   onStatusChange,
@@ -72,6 +73,16 @@ function GvgStatusGate({
       }
     }
   }, [onGvgRunningChange, onGvgScopeChange, onStatusChange, refreshStatus])
+
+  useEffect(() => {
+    if (!refreshSeq) {
+      return
+    }
+
+    refreshStatus().catch((error) => {
+      setStatusError(error instanceof Error ? error.message : 'Syncing error: failed to fetch GvG status.')
+    })
+  }, [refreshSeq, refreshStatus])
 
   const startGvg = async () => {
     const minutesValue = Number(additionalMinutes)

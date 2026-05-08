@@ -16,6 +16,7 @@ win:
     - portable
 portable:
   artifactName: ${name}-${version}-portable.${ext}
+  requestExecutionLevel: admin
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:

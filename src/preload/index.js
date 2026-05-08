@@ -15,6 +15,20 @@ const api = {
   hideOverlay() {
     ipcRenderer.send('overlay:hide')
   },
+  setCommanderHotkeys(shortcutConfig) {
+    ipcRenderer.send('overlay:set-commander-hotkeys', shortcutConfig)
+  },
+  onCommanderHotkey(callback) {
+    if (typeof callback !== 'function') {
+      return () => {}
+    }
+
+    const listener = (_event, payload) => callback(payload)
+    ipcRenderer.on('overlay:commander-hotkey', listener)
+    return () => {
+      ipcRenderer.removeListener('overlay:commander-hotkey', listener)
+    }
+  },
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

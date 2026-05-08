@@ -1,46 +1,147 @@
-import { useEffect, useMemo, useState } from 'react'
-import { resetGvg } from '../services/serverApi'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { resetCommanderBuff, resetGvg, submitExCooldown } from '../services/serverApi'
 
 function TimersScreen({
   gvgScope,
   serverUrl,
   postHeaders,
   isCommander,
+  team,
+  userName,
+  commanderBuffKeybinds,
+  exHotkeyActions,
+  localHotkeyBindings,
+  onRequestStatusRefresh,
   onOpenSettings,
   children,
 }) {
-  const formatTime = (seconds) => {
-    const min = Math.floor(seconds / 60)
-    const sec = seconds % 60
-    return `${min}:${sec < 10 ? '0' : ''}${sec}`
-  }
-
-  const [gvgRemaining, setGvgRemaining] = useState(0)
   const [syncError, setSyncError] = useState('')
   const [resetPhase, setResetPhase] = useState('idle')
   const [countdownValue, setCountdownValue] = useState(3)
-  const hasGvgTimer = Number.isFinite(gvgScope?.timeRemaining)
+  const inFlightFieldsRef = useRef(new Set())
+  const enabledCommanderFields = useMemo(
+    () =>
+      new Set(
+        Object.entries({
+          healcut: commanderBuffKeybinds?.healcut,
+          sprint: commanderBuffKeybinds?.sprint,
+          carrierdmg: commanderBuffKeybinds?.carrierdmg,
+        })
+          .filter(([, keybind]) => typeof keybind === 'string' && keybind.trim().length > 0)
+          .map(([field]) => field)
+      ),
+    [commanderBuffKeybinds]
+  )
+  const enabledExActionFields = useMemo(
+    () =>
+      new Set(
+        Object.entries(exHotkeyActions ?? {})
+          .filter(([, action]) => {
+            const weaponCode = action?.weaponCode
+            return typeof weaponCode === 'string' && weaponCode.trim().length > 0
+          })
+          .map(([field]) => field)
+      ),
+    [exHotkeyActions]
+  )
+  const normalizedHotkeyBindings = useMemo(() => {
+    const entries = Object.entries(localHotkeyBindings ?? {})
+      .filter(([, value]) => typeof value === 'string' && value.trim().length > 0)
+      .map(([field, value]) => {
+        const parts = value
+          .split('+')
+          .map((part) => part.trim())
+          .filter(Boolean)
+          .slice(0, 2)
+        return [field, Array.from(new Set(parts))]
+      })
+      .filter(([, parts]) => parts.length > 0)
 
-  useEffect(() => {
-    if (!hasGvgTimer) {
-      setGvgRemaining(0)
-      return
-    }
+    return Object.fromEntries(entries)
+  }, [localHotkeyBindings])
 
-    setGvgRemaining(Math.max(0, Math.floor(gvgScope.timeRemaining)))
-  }, [gvgScope?.timeRemaining, hasGvgTimer])
+  const executeHotkeyField = useCallback(
+    (field) => {
+      if (!field || inFlightFieldsRef.current.has(field)) {
+        return
+      }
 
-  useEffect(() => {
-    if (!hasGvgTimer || gvgRemaining <= 0) {
-      return undefined
-    }
+      // Commander buff reset actions.
+      if (enabledCommanderFields.has(field) && isCommander) {
+        const remaining = Number(gvgScope?.commanderCooldowns?.[field])
+        const isReady = Number.isFinite(remaining) && remaining <= 0
+        if (!isReady) {
+          return
+        }
 
-    const id = setInterval(() => {
-      setGvgRemaining((prev) => Math.max(0, prev - 1))
-    }, 1000)
+        inFlightFieldsRef.current.add(field)
+        void resetCommanderBuff(serverUrl, field, postHeaders?.() ?? {})
+          .then(() => {
+            setSyncError('')
+            onRequestStatusRefresh?.()
+          })
+          .catch(() => {
+            setSyncError(`Syncing error: failed to reset commander buff (${field}).`)
+          })
+          .finally(() => {
+            inFlightFieldsRef.current.delete(field)
+          })
+        return
+      }
 
-    return () => clearInterval(id)
-  }, [gvgRemaining, hasGvgTimer])
+      // EX cooldown submit actions.
+      if (enabledExActionFields.has(field)) {
+        const selectedAction = exHotkeyActions?.[field]
+        const weaponCode = selectedAction?.weaponCode
+        const weaponCooldown = Number(selectedAction?.weaponCooldown)
+        const trimmedUserName = typeof userName === 'string' ? userName.trim() : ''
+        const teamLower = typeof team === 'string' ? team.toLowerCase() : ''
+
+        if (
+          !weaponCode ||
+          !trimmedUserName ||
+          (teamLower !== 'offense' && teamLower !== 'defense') ||
+          !Number.isFinite(weaponCooldown)
+        ) {
+          return
+        }
+
+        inFlightFieldsRef.current.add(field)
+        void submitExCooldown(
+          serverUrl,
+          {
+            team: teamLower,
+            userName: trimmedUserName,
+            weaponCode,
+            weaponCooldown: Math.max(0, Math.floor(weaponCooldown)),
+          },
+          postHeaders?.() ?? {}
+        )
+          .then(() => {
+            setSyncError('')
+            onRequestStatusRefresh?.()
+          })
+          .catch(() => {
+            setSyncError('Syncing error: failed to submit EX cooldown.')
+          })
+          .finally(() => {
+            inFlightFieldsRef.current.delete(field)
+          })
+      }
+    },
+    [
+      enabledCommanderFields,
+      enabledExActionFields,
+      exHotkeyActions,
+      gvgScope,
+      isCommander,
+      onRequestStatusRefresh,
+      postHeaders,
+      serverUrl,
+      team,
+      userName,
+    ]
+  )
 
   useEffect(() => {
     if (resetPhase !== 'countdown') {
@@ -48,7 +149,7 @@ function TimersScreen({
     }
 
     const id = setTimeout(() => {
-      if (countdownValue <= 0) {
+      if (countdownValue <= 1) {
         setResetPhase('confirm')
       } else {
         setCountdownValue((prev) => prev - 1)
@@ -70,13 +171,132 @@ function TimersScreen({
     return () => clearTimeout(id)
   }, [resetPhase])
 
-  const gvgTopLabel = useMemo(() => {
-    if (!hasGvgTimer || gvgRemaining <= 0) {
-      return 'READY'
+  useEffect(() => {
+    const hasCommanderActions = isCommander && enabledCommanderFields.size > 0
+    const hasExActions = enabledExActionFields.size > 0
+
+    if (!hasCommanderActions && !hasExActions) {
+      return undefined
     }
 
-    return formatTime(gvgRemaining)
-  }, [gvgRemaining, hasGvgTimer])
+    if (!window.api?.onCommanderHotkey) {
+      return undefined
+    }
+
+    const onCommanderHotkey = (payload) => {
+      const field = typeof payload?.field === 'string' ? payload.field : ''
+      executeHotkeyField(field)
+    }
+
+    const unsubscribe = window.api.onCommanderHotkey(onCommanderHotkey)
+    return () => {
+      inFlightFieldsRef.current.clear()
+      if (typeof unsubscribe === 'function') {
+        unsubscribe()
+      }
+    }
+  }, [
+    enabledCommanderFields,
+    enabledExActionFields,
+    executeHotkeyField,
+  ])
+
+  useEffect(() => {
+    const hasCommanderActions = isCommander && enabledCommanderFields.size > 0
+    const hasExActions = enabledExActionFields.size > 0
+
+    if (!hasCommanderActions && !hasExActions) {
+      return undefined
+    }
+
+    const pressedCodes = new Set()
+    const activeLocalFields = new Set()
+
+    const isTypingTarget = (target) => {
+      if (!target || !(target instanceof HTMLElement)) {
+        return false
+      }
+      const tagName = target.tagName
+      return (
+        tagName === 'INPUT' ||
+        tagName === 'TEXTAREA' ||
+        tagName === 'SELECT' ||
+        target.isContentEditable
+      )
+    }
+
+    const onKeyDown = (event) => {
+      if (isTypingTarget(event.target)) {
+        return
+      }
+
+      const code = String(event.code || '')
+      if (!code) {
+        return
+      }
+
+      pressedCodes.add(code)
+
+      for (const [field, parts] of Object.entries(normalizedHotkeyBindings)) {
+        if (!Array.isArray(parts) || parts.length === 0) {
+          continue
+        }
+
+        const matches = parts.every((part) => pressedCodes.has(part))
+        if (!matches) {
+          continue
+        }
+
+        if (activeLocalFields.has(field)) {
+          continue
+        }
+
+        activeLocalFields.add(field)
+        executeHotkeyField(field)
+      }
+    }
+
+    const onKeyUp = (event) => {
+      const code = String(event.code || '')
+      if (code) {
+        pressedCodes.delete(code)
+      }
+
+      for (const [field, parts] of Object.entries(normalizedHotkeyBindings)) {
+        if (!Array.isArray(parts) || parts.length === 0) {
+          continue
+        }
+
+        const stillActive = parts.every((part) => pressedCodes.has(part))
+        if (!stillActive) {
+          activeLocalFields.delete(field)
+        }
+      }
+    }
+
+    const onWindowBlur = () => {
+      pressedCodes.clear()
+      activeLocalFields.clear()
+    }
+
+    window.addEventListener('keydown', onKeyDown, true)
+    window.addEventListener('keyup', onKeyUp, true)
+    window.addEventListener('blur', onWindowBlur)
+
+    return () => {
+      pressedCodes.clear()
+      activeLocalFields.clear()
+      window.removeEventListener('keydown', onKeyDown, true)
+      window.removeEventListener('keyup', onKeyUp, true)
+      window.removeEventListener('blur', onWindowBlur)
+    }
+  }, [
+    enabledCommanderFields,
+    enabledExActionFields,
+    executeHotkeyField,
+    isCommander,
+    normalizedHotkeyBindings,
+  ])
 
   const resetGvgFromServer = async () => {
     if (resetPhase === 'idle') {
@@ -93,6 +313,7 @@ function TimersScreen({
       await resetGvg(serverUrl, postHeaders?.() ?? {})
       setSyncError('')
       setResetPhase('idle')
+      onRequestStatusRefresh?.()
     } catch {
       setSyncError('Syncing error: failed to reset GvG.')
       setResetPhase('idle')
@@ -101,19 +322,6 @@ function TimersScreen({
 
   return (
     <>
-      {hasGvgTimer ? (
-        <div className="px-3 pt-2 text-[10px] text-white/60">
-          GvG:
-          <span
-            className={`ml-1 font-mono font-semibold ${
-              gvgRemaining <= 0 ? 'text-emerald-400' : 'text-sky-300'
-            }`}
-          >
-            {gvgTopLabel}
-          </span>
-        </div>
-      ) : null}
-
       {syncError ? (
         <div className="px-3 py-1 text-[11px] text-red-300 bg-red-950/30 border-b border-red-500/40">
           {syncError}

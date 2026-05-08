@@ -11,23 +11,35 @@ const initialTimers = [
   // { id: 4, name: 'Tower Push Timer', duration: 240, remaining: 240, isRunning: false },
 ]
 const baseOverlayWidth = 380
-const defaultServerUrl = 'http://217.182.78.238:3333'
 const weaponOptions = [
-  { label: 'Mo blade', code: 'mo_blade' },
-  { label: 'Ink Fan', code: 'ink_fan' },
-  { label: 'Heal Umbrella', code: 'heal_umbrella' },
+  { label: 'Mo Blade (suck)', code: 'mo_blade' },
+  { label: 'Ink Fan (wall)', code: 'ink_fan' },
   { label: 'Twin Blades', code: 'twin_blades' },
 ]
 const validWeaponCodes = new Set(weaponOptions.map((item) => item.code))
 const legacyWeaponCodeMap = {
+  'Mo Blade (suck)': 'mo_blade',
   'Mo blade': 'mo_blade',
+  'Ink Fan (wall)': 'ink_fan',
   'Ink Fan': 'ink_fan',
-  'Heal Umbrella': 'heal_umbrella',
   'Twin Blades': 'twin_blades',
 }
 
 const setupStorageKey = 'wwm-overlay-setup'
+const commanderBuffKeybindFields = [
+  'commanderHealcutKeybind',
+  'commanderSprintKeybind',
+  'commanderCarrierDmgKeybind',
+]
 const clampTransparency = (value) => Math.min(100, Math.max(0, value))
+const normalizeCooldown = (value, fallback = 120) => {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) {
+    return fallback
+  }
+
+  return Math.max(0, Math.floor(parsed))
+}
 const normalizeKeybind = (value, fallback) => {
   if (typeof value !== 'string') {
     return fallback
@@ -50,11 +62,18 @@ const defaultSetup = {
   userName: '',
   mode: 'Member',
   team: 'Offense',
+  commanderTimersSize: 'Big',
+  showTeamExCooldowns: true,
   apiKey: '',
   firstWeapon: '',
   secondWeapon: '',
-  firstWeaponKeybind: 'Numpad1',
-  secondWeaponKeybind: 'Numpad2',
+  firstWeaponCooldown: 120,
+  secondWeaponCooldown: 120,
+  firstWeaponKeybind: 'Numpad8',
+  secondWeaponKeybind: 'Numpad9',
+  commanderHealcutKeybind: 'Numpad1',
+  commanderSprintKeybind: 'Numpad2',
+  commanderCarrierDmgKeybind: 'Numpad3',
   transparency: 100,
 }
 
@@ -72,6 +91,11 @@ function loadSavedSetup() {
     const parsed = JSON.parse(raw)
     const mode = parsed?.setup?.mode === 'Commander' ? 'Commander' : 'Member'
     const team = parsed?.setup?.team === 'Defense' ? 'Defense' : 'Offense'
+    const commanderTimersSize = parsed?.setup?.commanderTimersSize === 'Small' ? 'Small' : 'Big'
+    const showTeamExCooldowns =
+      typeof parsed?.setup?.showTeamExCooldowns === 'boolean'
+        ? parsed.setup.showTeamExCooldowns
+        : true
     const legacySelectedGear = Array.isArray(parsed?.setup?.selectedGear) ? parsed.setup.selectedGear : []
     const firstWeaponRaw = parsed?.setup?.firstWeapon ?? legacyWeaponCodeMap[legacySelectedGear[0]] ?? ''
     const secondWeaponRaw = parsed?.setup?.secondWeapon ?? legacyWeaponCodeMap[legacySelectedGear[1]] ?? ''
@@ -97,16 +121,42 @@ function loadSavedSetup() {
           : ''
     }
 
+    const commanderHealcutKeybind = normalizeKeybind(
+      parsed?.setup?.commanderHealcutKeybind,
+      defaultSetup.commanderHealcutKeybind
+    )
+    const commanderSprintKeybind = normalizeKeybind(
+      parsed?.setup?.commanderSprintKeybind,
+      defaultSetup.commanderSprintKeybind
+    )
+    const commanderCarrierDmgKeybind = normalizeKeybind(
+      parsed?.setup?.commanderCarrierDmgKeybind,
+      defaultSetup.commanderCarrierDmgKeybind
+    )
+
     return {
       setup: {
         userName: typeof parsed?.setup?.userName === 'string' ? parsed.setup.userName : '',
         mode,
         team,
+        commanderTimersSize,
+        showTeamExCooldowns,
         apiKey: typeof parsed?.setup?.apiKey === 'string' ? parsed.setup.apiKey : '',
         firstWeapon,
         secondWeapon,
+        firstWeaponCooldown: normalizeCooldown(
+          parsed?.setup?.firstWeaponCooldown,
+          defaultSetup.firstWeaponCooldown
+        ),
+        secondWeaponCooldown: normalizeCooldown(
+          parsed?.setup?.secondWeaponCooldown,
+          defaultSetup.secondWeaponCooldown
+        ),
         firstWeaponKeybind,
         secondWeaponKeybind,
+        commanderHealcutKeybind,
+        commanderSprintKeybind,
+        commanderCarrierDmgKeybind,
         transparency: clampTransparency(
           Number.isFinite(Number(parsed?.setup?.transparency))
             ? Number(parsed.setup.transparency)
@@ -124,18 +174,31 @@ function App() {
   const [timers, setTimers] = useState(initialTimers)
   const [, setGvgRunning] = useState(false)
   const [gvgScope, setGvgScope] = useState(null)
-  const [serverUrl, setServerUrl] = useState(defaultServerUrl)
+  const [statusUserCooldowns, setStatusUserCooldowns] = useState(null)
+  const [serverUrl, setServerUrl] = useState('')
   const [overlayScale, setOverlayScale] = useState(1)
   const [contentHeight, setContentHeight] = useState(420)
   const [isConfigured, setIsConfigured] = useState(() => loadSavedSetup().isConfigured)
   const [setupError, setSetupError] = useState('')
   const [setup, setSetup] = useState(() => loadSavedSetup().setup)
+  const [statusRefreshSeq, setStatusRefreshSeq] = useState(0)
   const overlayContentRef = useRef(null)
   const transparencyRatio = clampTransparency(setup.transparency) / 100
   const panelAlpha = 0.05 * transparencyRatio
 
   const isCommander = setup.mode === 'Commander'
   const TeamTimers = setup.team === 'Defense' ? DefenseTimers : OffenseTimers
+  const localHotkeyBindings = {
+    ...(isCommander
+      ? {
+          healcut: setup.commanderHealcutKeybind,
+          sprint: setup.commanderSprintKeybind,
+          carrierdmg: setup.commanderCarrierDmgKeybind,
+        }
+      : {}),
+    ...(setup.firstWeapon ? { ex_weapon_1: setup.firstWeaponKeybind } : {}),
+    ...(setup.secondWeapon ? { ex_weapon_2: setup.secondWeaponKeybind } : {}),
+  }
   const canContinue =
     setup.userName.trim().length > 0 &&
     (!isCommander || setup.apiKey.trim().length > 0)
@@ -202,10 +265,51 @@ function App() {
     window.api?.setOverlayHeight?.(nextHeight)
   }, [contentHeight, overlayScale])
 
-  const applyStatusTimers = useCallback((status) => {
-    if (!status) {
+  useEffect(() => {
+    if (!window.api?.setCommanderHotkeys) {
       return
     }
+
+    if (!isConfigured) {
+      window.api.setCommanderHotkeys({})
+      return
+    }
+
+    const hotkeyConfig = {}
+    if (isCommander) {
+      hotkeyConfig.healcut = setup.commanderHealcutKeybind
+      hotkeyConfig.sprint = setup.commanderSprintKeybind
+      hotkeyConfig.carrierdmg = setup.commanderCarrierDmgKeybind
+    }
+
+    if (setup.firstWeapon) {
+      hotkeyConfig.ex_weapon_1 = setup.firstWeaponKeybind
+    }
+
+    if (setup.secondWeapon) {
+      hotkeyConfig.ex_weapon_2 = setup.secondWeaponKeybind
+    }
+
+    window.api.setCommanderHotkeys(hotkeyConfig)
+  }, [
+    isCommander,
+    isConfigured,
+    setup.firstWeapon,
+    setup.firstWeaponKeybind,
+    setup.secondWeapon,
+    setup.secondWeaponKeybind,
+    setup.commanderCarrierDmgKeybind,
+    setup.commanderHealcutKeybind,
+    setup.commanderSprintKeybind,
+  ])
+
+  const applyStatusTimers = useCallback((status) => {
+    if (!status) {
+      setStatusUserCooldowns(null)
+      return
+    }
+
+    setStatusUserCooldowns(status.userCooldowns ?? null)
 
     const nextTimers =
       status.timers ??
@@ -274,6 +378,15 @@ function App() {
         return prev
       }
 
+      if (commanderBuffKeybindFields.includes(field) && value) {
+        const hasDuplicate = commanderBuffKeybindFields.some(
+          (keybindField) => keybindField !== field && prev[keybindField] === value
+        )
+        if (hasDuplicate) {
+          return prev
+        }
+      }
+
       return next
     })
   }
@@ -286,6 +399,10 @@ function App() {
     setGvgScope(null)
     setTimers(initialTimers)
   }
+
+  const requestImmediateStatusRefresh = useCallback(() => {
+    setStatusRefreshSeq((prev) => prev + 1)
+  }, [])
 
   return (
     <div className="w-screen h-screen overflow-hidden">
@@ -333,6 +450,7 @@ function App() {
               mode={setup.mode}
               serverUrl={serverUrl}
               postHeaders={postHeaders}
+              refreshSeq={statusRefreshSeq}
               onGvgRunningChange={setGvgRunning}
               onGvgScopeChange={setGvgScope}
               onStatusChange={applyStatusTimers}
@@ -348,6 +466,28 @@ function App() {
                 serverUrl={serverUrl}
                 postHeaders={postHeaders}
                 isCommander={isCommander}
+                team={setup.team}
+                userName={setup.userName}
+                commanderTimersSize={setup.commanderTimersSize}
+                showTeamExCooldowns={setup.showTeamExCooldowns}
+                userCooldowns={statusUserCooldowns}
+                commanderBuffKeybinds={{
+                  healcut: setup.commanderHealcutKeybind,
+                  sprint: setup.commanderSprintKeybind,
+                  carrierdmg: setup.commanderCarrierDmgKeybind,
+                }}
+                exHotkeyActions={{
+                  ex_weapon_1: {
+                    weaponCode: setup.firstWeapon,
+                    weaponCooldown: setup.firstWeaponCooldown,
+                  },
+                  ex_weapon_2: {
+                    weaponCode: setup.secondWeapon,
+                    weaponCooldown: setup.secondWeaponCooldown,
+                  },
+                }}
+                localHotkeyBindings={localHotkeyBindings}
+                onRequestStatusRefresh={requestImmediateStatusRefresh}
                 onOpenSettings={() => {
                   setIsConfigured(false)
                   setGvgRunning(false)

@@ -58,6 +58,7 @@ export async function fetchGvgStatus(serverUrl, headers) {
     gvgRunning: Boolean(payload?.gvgRunning),
     gvgScope: payload?.gvgScope ?? null,
     timers: Array.isArray(payload?.timers) ? payload.timers : null,
+    userCooldowns: payload?.userCooldowns ?? payload?.gvgScope?.userCooldowns ?? null,
     raw: payload ?? null,
   }
 }
@@ -102,6 +103,23 @@ export async function resetGvg(serverUrl, headers) {
     url: `${serverUrl}${endpoint}`,
     method: 'POST',
     headers,
+  })
+
+  if (!response.ok) {
+    throw new Error(buildHttpError(response, endpoint))
+  }
+}
+
+export async function submitExCooldown(serverUrl, payload, headers) {
+  const endpoint = '/wwmapi/exCooldown'
+  const response = await requestThroughBridge({
+    url: `${serverUrl}${endpoint}`,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...headers,
+    },
+    body: JSON.stringify(payload),
   })
 
   if (!response.ok) {

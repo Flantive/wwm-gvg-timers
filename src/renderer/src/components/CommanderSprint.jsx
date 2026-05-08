@@ -1,6 +1,6 @@
 import CommanderBuffTimer from './CommanderBuffTimer'
 
-function CommanderSprint({ gvgScope, serverUrl, postHeaders, canReset }) {
+function CommanderSprint({ gvgScope, serverUrl, postHeaders, canReset, onResetSuccess, compact }) {
   return (
     <CommanderBuffTimer
       gvgScope={gvgScope}
@@ -8,7 +8,10 @@ function CommanderSprint({ gvgScope, serverUrl, postHeaders, canReset }) {
       postHeaders={postHeaders}
       buffField="sprint"
       label="Commander: Sprint"
+      compactLabel="Sprint"
+      compact={compact}
       canReset={canReset}
+      onResetSuccess={onResetSuccess}
     />
   )
 }

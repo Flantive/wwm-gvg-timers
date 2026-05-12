@@ -3,6 +3,8 @@ import InitialSetupScreen from './components/InitialSetupScreen'
 import OffenseTimers from './components/OffenseTimers'
 import DefenseTimers from './components/DefenseTimers'
 import GvgStatusGate from './components/GvgStatusGate'
+import WelcomeScreen from './components/WelcomeScreen'
+import { fetchAuthMe, logoutAuth } from './services/serverApi'
 
 const initialTimers = [
   { id: 1, name: 'Com: Healcut', duration: 300, remaining: 300, isRunning: false },
@@ -14,6 +16,7 @@ const baseOverlayWidth = 380
 const weaponOptions = [
   { label: 'Mo Blade (suck)', code: 'mo_blade' },
   { label: 'Ink Fan (wall)', code: 'ink_fan' },
+  { label: 'Heal Fan', code: 'heal_fan' },
   { label: 'Twin Blades', code: 'twin_blades' },
 ]
 const validWeaponCodes = new Set(weaponOptions.map((item) => item.code))
@@ -22,10 +25,20 @@ const legacyWeaponCodeMap = {
   'Mo blade': 'mo_blade',
   'Ink Fan (wall)': 'ink_fan',
   'Ink Fan': 'ink_fan',
+  'Heal Fan': 'heal_fan',
   'Twin Blades': 'twin_blades',
+}
+const authWeaponCodeMap = {
+  'Inkwell Fan': 'ink_fan',
+  'Panacea Fan': 'heal_fan',
+  'Thundercry Blade': 'mo_blade',
+  'Infernal Twinblades': 'twin_blades',
 }
 
 const setupStorageKey = 'wwm-overlay-setup'
+const authStorageKey = 'wwm-overlay-auth'
+const commanderRoleId = '1459682165863219333'
+const guildWarRoleId = '1498694492507734056'
 const commanderBuffKeybindFields = [
   'commanderHealcutKeybind',
   'commanderSprintKeybind',
@@ -59,12 +72,10 @@ const normalizeKeybind = (value, fallback) => {
 }
 
 const defaultSetup = {
-  userName: '',
-  mode: 'Member',
+  discordUserName: '',
   team: 'Offense',
-  commanderTimersSize: 'Big',
+  commanderTimersSize: 'Small',
   showTeamExCooldowns: true,
-  apiKey: '',
   firstWeapon: '',
   secondWeapon: '',
   firstWeaponCooldown: 120,
@@ -75,6 +86,30 @@ const defaultSetup = {
   commanderSprintKeybind: 'Numpad2',
   commanderCarrierDmgKeybind: 'Numpad3',
   transparency: 100,
+}
+
+function loadSavedAuth() {
+  if (typeof window === 'undefined') {
+    return { sessionToken: '', authUserName: '', authIgn: '' }
+  }
+
+  try {
+    const raw = window.localStorage.getItem(authStorageKey)
+    if (!raw) {
+      return { sessionToken: '', authUserName: '', authIgn: '' }
+    }
+
+    const parsed = JSON.parse(raw)
+    return {
+      sessionToken:
+        typeof parsed?.sessionToken === 'string' ? parsed.sessionToken : '',
+      authUserName:
+        typeof parsed?.authUserName === 'string' ? parsed.authUserName : '',
+      authIgn: typeof parsed?.authIgn === 'string' ? parsed.authIgn : '',
+    }
+  } catch {
+    return { sessionToken: '', authUserName: '', authIgn: '' }
+  }
 }
 
 function loadSavedSetup() {
@@ -89,9 +124,8 @@ function loadSavedSetup() {
     }
 
     const parsed = JSON.parse(raw)
-    const mode = parsed?.setup?.mode === 'Commander' ? 'Commander' : 'Member'
     const team = parsed?.setup?.team === 'Defense' ? 'Defense' : 'Offense'
-    const commanderTimersSize = parsed?.setup?.commanderTimersSize === 'Small' ? 'Small' : 'Big'
+    const commanderTimersSize = parsed?.setup?.commanderTimersSize === 'Big' ? 'Big' : 'Small'
     const showTeamExCooldowns =
       typeof parsed?.setup?.showTeamExCooldowns === 'boolean'
         ? parsed.setup.showTeamExCooldowns
@@ -136,12 +170,13 @@ function loadSavedSetup() {
 
     return {
       setup: {
-        userName: typeof parsed?.setup?.userName === 'string' ? parsed.setup.userName : '',
-        mode,
+        discordUserName:
+          typeof parsed?.setup?.discordUserName === 'string'
+            ? parsed.setup.discordUserName
+            : '',
         team,
         commanderTimersSize,
         showTeamExCooldowns,
-        apiKey: typeof parsed?.setup?.apiKey === 'string' ? parsed.setup.apiKey : '',
         firstWeapon,
         secondWeapon,
         firstWeaponCooldown: normalizeCooldown(
@@ -171,11 +206,22 @@ function loadSavedSetup() {
 }
 
 function App() {
+  const savedAuth = loadSavedAuth()
   const [timers, setTimers] = useState(initialTimers)
   const [, setGvgRunning] = useState(false)
   const [gvgScope, setGvgScope] = useState(null)
   const [statusUserCooldowns, setStatusUserCooldowns] = useState(null)
   const [serverUrl, setServerUrl] = useState('')
+  const [authServerUrl, setAuthServerUrl] = useState('')
+  const [authLoginUrl, setAuthLoginUrl] = useState('')
+  const [sessionToken, setSessionToken] = useState(savedAuth.sessionToken)
+  const [authUserName, setAuthUserName] = useState(savedAuth.authUserName)
+  const [authIgn, setAuthIgn] = useState(savedAuth.authIgn)
+  const [authRoles, setAuthRoles] = useState([])
+  const [loginBusy, setLoginBusy] = useState(false)
+  const [loginError, setLoginError] = useState('')
+  const [logoutBusy, setLogoutBusy] = useState(false)
+  const [authChecking, setAuthChecking] = useState(Boolean(savedAuth.sessionToken))
   const [overlayScale, setOverlayScale] = useState(1)
   const [contentHeight, setContentHeight] = useState(420)
   const [isConfigured, setIsConfigured] = useState(() => loadSavedSetup().isConfigured)
@@ -186,7 +232,15 @@ function App() {
   const transparencyRatio = clampTransparency(setup.transparency) / 100
   const panelAlpha = 0.05 * transparencyRatio
 
-  const isCommander = setup.mode === 'Commander'
+  const isCommander = authRoles.includes(commanderRoleId)
+  const hasGuildWarRole = authRoles.includes(guildWarRoleId)
+  const normalizedIgnForRequests = typeof authIgn === 'string' ? authIgn.trim() : ''
+  const hasUsableIgnForRequests =
+    Boolean(normalizedIgnForRequests) &&
+    normalizedIgnForRequests.toLowerCase() !== 'null'
+  const requestUserName = hasUsableIgnForRequests
+    ? normalizedIgnForRequests
+    : authUserName.trim()
   const TeamTimers = setup.team === 'Defense' ? DefenseTimers : OffenseTimers
   const localHotkeyBindings = {
     ...(isCommander
@@ -199,9 +253,7 @@ function App() {
     ...(setup.firstWeapon ? { ex_weapon_1: setup.firstWeaponKeybind } : {}),
     ...(setup.secondWeapon ? { ex_weapon_2: setup.secondWeaponKeybind } : {}),
   }
-  const canContinue =
-    setup.userName.trim().length > 0 &&
-    (!isCommander || setup.apiKey.trim().length > 0)
+  const canContinue = true
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -218,21 +270,188 @@ function App() {
   }, [setup, isConfigured])
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    window.localStorage.setItem(
+      authStorageKey,
+      JSON.stringify({
+        sessionToken,
+        authUserName,
+        authIgn,
+      })
+    )
+  }, [authIgn, authUserName, sessionToken])
+
+  useEffect(() => {
     let active = true
 
-    window.api
-      ?.getServerUrl?.()
-      .then((url) => {
-        if (active && typeof url === 'string' && url.trim()) {
-          setServerUrl(url)
+    Promise.all([
+      window.api?.getServerUrl?.(),
+      window.api?.getAuthServerUrl?.(),
+      window.api?.getAuthLoginUrl?.(),
+      window.api?.getPendingSessionToken?.(),
+    ])
+      .then(([mainServer, authServer, loginUrl, pendingToken]) => {
+        if (!active) {
+          return
+        }
+
+        if (typeof mainServer === 'string' && mainServer.trim()) {
+          setServerUrl(mainServer)
+        }
+
+        if (typeof authServer === 'string' && authServer.trim()) {
+          setAuthServerUrl(authServer)
+        }
+
+        if (typeof loginUrl === 'string' && loginUrl.trim()) {
+          setAuthLoginUrl(loginUrl)
+        }
+
+        if (typeof pendingToken === 'string' && pendingToken.trim()) {
+          setSessionToken(pendingToken.trim())
+          setAuthChecking(true)
+          setLoginError('')
         }
       })
       .catch(() => {})
 
+    const unsubscribeAuthCallback = window.api?.onAuthCallback?.((payload) => {
+      const callbackToken =
+        typeof payload?.sessionToken === 'string' ? payload.sessionToken.trim() : ''
+      if (!callbackToken) {
+        return
+      }
+
+      setSessionToken(callbackToken)
+      setAuthChecking(true)
+      setLoginError('')
+    })
+
+    return () => {
+      active = false
+      if (typeof unsubscribeAuthCallback === 'function') {
+        unsubscribeAuthCallback()
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!sessionToken) {
+      setAuthChecking(false)
+      setAuthUserName('')
+      setAuthIgn('')
+      return
+    }
+
+    if (!authServerUrl) {
+      return
+    }
+
+    let active = true
+    setAuthChecking(true)
+
+    fetchAuthMe(authServerUrl, { 'X-Session-Token': sessionToken })
+      .then((payload) => {
+        if (!active) {
+          return
+        }
+
+        const identity = payload?.user ?? payload ?? {}
+        const resolvedUserName = identity?.username ?? payload?.username ?? ''
+        const resolvedIgn = identity?.ign ?? payload?.ign ?? ''
+        const resolvedWeaponsRaw =
+          identity?.weapons ??
+          payload?.weapons ??
+          null
+        const resolvedRolesRaw =
+          payload?.guildMember?.roles ??
+          identity?.guildMember?.roles ??
+          []
+        const resolvedRoles = Array.isArray(resolvedRolesRaw)
+          ? resolvedRolesRaw.map((item) => String(item))
+          : []
+        let mappedWeapons = null
+        if (Array.isArray(resolvedWeaponsRaw)) {
+          const trimmedWeapons = resolvedWeaponsRaw
+            .slice(0, 2)
+            .map((item) => (typeof item === 'string' ? item.trim() : ''))
+
+          const hasUnknownWeapon = trimmedWeapons.some(
+            (weaponName) => weaponName && !authWeaponCodeMap[weaponName]
+          )
+
+          if (hasUnknownWeapon) {
+            mappedWeapons = ['', '']
+          } else {
+            const [firstMapped = '', secondMapped = ''] = trimmedWeapons.map(
+              (weaponName) => authWeaponCodeMap[weaponName] ?? ''
+            )
+            mappedWeapons =
+              firstMapped && secondMapped === firstMapped
+                ? [firstMapped, '']
+                : [firstMapped, secondMapped]
+          }
+        } else if (resolvedWeaponsRaw == null) {
+          mappedWeapons = ['', '']
+        }
+
+        if (typeof resolvedUserName === 'string' && resolvedUserName.trim()) {
+          const trimmed = resolvedUserName.trim()
+          setAuthUserName(trimmed)
+          setAuthIgn(typeof resolvedIgn === 'string' ? resolvedIgn.trim() : '')
+          setAuthRoles(resolvedRoles)
+          setSetup((prev) => {
+            const nextSetup = {
+              ...prev,
+              discordUserName: trimmed,
+            }
+            if (mappedWeapons) {
+              nextSetup.firstWeapon = mappedWeapons[0]
+              nextSetup.secondWeapon = mappedWeapons[1]
+            }
+            return nextSetup
+          })
+        } else {
+          setAuthUserName('')
+          setAuthIgn('')
+          setAuthRoles(resolvedRoles)
+          if (mappedWeapons) {
+            setSetup((prev) => ({
+              ...prev,
+              firstWeapon: mappedWeapons[0],
+              secondWeapon: mappedWeapons[1],
+            }))
+          }
+        }
+
+        setLoginError('')
+      })
+      .catch((error) => {
+        console.error('[auth/me] request failed:', error)
+        if (!active) {
+          return
+        }
+
+        setSessionToken('')
+        setAuthUserName('')
+        setAuthIgn('')
+        setAuthRoles([])
+        setIsConfigured(false)
+        setLoginError('')
+      })
+      .finally(() => {
+        if (active) {
+          setAuthChecking(false)
+        }
+      })
+
     return () => {
       active = false
     }
-  }, [])
+  }, [authServerUrl, sessionToken])
 
   useEffect(() => {
     if (!overlayContentRef.current || typeof ResizeObserver === 'undefined') {
@@ -325,27 +544,21 @@ function App() {
 
   const postHeaders = useCallback(() => {
     const headers = {}
-    const trimmedUserName = setup.userName.trim()
 
-    if (trimmedUserName) {
-      headers.userName = trimmedUserName
+    if (requestUserName) {
+      headers.userName = requestUserName
     }
 
     headers.team = setup.team
 
-    if (isCommander && setup.apiKey.trim()) {
-      headers['X-API-Key'] = setup.apiKey.trim()
+    if (sessionToken) {
+      headers['X-Session-Token'] = sessionToken
     }
 
     return headers
-  }, [isCommander, setup.apiKey, setup.team, setup.userName])
+  }, [requestUserName, sessionToken, setup.team])
 
   const submitSetup = () => {
-    if (!canContinue) {
-      setSetupError('Fill all required fields.')
-      return
-    }
-
     setSetupError('')
     setIsConfigured(true)
   }
@@ -392,12 +605,57 @@ function App() {
   }
 
   const resetSetup = () => {
-    setSetup(defaultSetup)
+    setSetup((prev) => ({
+      ...defaultSetup,
+      discordUserName: prev.discordUserName || authUserName,
+    }))
     setSetupError('')
     setIsConfigured(false)
     setGvgRunning(false)
     setGvgScope(null)
     setTimers(initialTimers)
+  }
+
+  const openDiscordLogin = async () => {
+    const loginLink = authLoginUrl || 'https://videoalchemy.pl:3334/auth/discord/login'
+
+    try {
+      setLoginBusy(true)
+      setLoginError('')
+      await window.api?.openExternal?.(loginLink)
+    } catch (error) {
+      setLoginError(
+        error instanceof Error ? error.message : 'Failed to open Discord login in browser.'
+      )
+    } finally {
+      setLoginBusy(false)
+    }
+  }
+
+  const handleLogout = async () => {
+    try {
+      setLogoutBusy(true)
+      setSetupError('')
+      if (authServerUrl && sessionToken) {
+        await logoutAuth(authServerUrl, { 'X-Session-Token': sessionToken })
+      }
+    } catch {
+      // Session may already be invalid server-side; continue local logout.
+    } finally {
+      setLogoutBusy(false)
+      setSessionToken('')
+      setAuthUserName('')
+      setAuthIgn('')
+      setAuthRoles([])
+      setIsConfigured(false)
+      setGvgRunning(false)
+      setGvgScope(null)
+      setStatusUserCooldowns(null)
+      setSetup((prev) => ({
+        ...prev,
+        discordUserName: '',
+      }))
+    }
   }
 
   const requestImmediateStatusRefresh = useCallback(() => {
@@ -437,17 +695,29 @@ function App() {
             </div>
           </div>
 
-          {!isConfigured ? (
+          {!sessionToken || authChecking ? (
+            <WelcomeScreen
+              loginError={loginError}
+              loginBusy={loginBusy}
+              onLogin={openDiscordLogin}
+            />
+          ) : !isConfigured ? (
             <InitialSetupScreen
               setup={setup}
               setupError={setupError}
+              authUserName={setup.discordUserName || authUserName}
+              authIgn={authIgn}
+              isCommanderRole={isCommander}
+              hasGuildWarRole={hasGuildWarRole}
+              logoutBusy={logoutBusy}
+              onLogout={handleLogout}
               onSetupChange={handleSetupChange}
               onSubmitSetup={submitSetup}
               onResetSetup={resetSetup}
             />
           ) : (
             <GvgStatusGate
-              mode={setup.mode}
+              mode={isCommander ? 'Commander' : 'Member'}
               serverUrl={serverUrl}
               postHeaders={postHeaders}
               refreshSeq={statusRefreshSeq}
@@ -467,7 +737,7 @@ function App() {
                 postHeaders={postHeaders}
                 isCommander={isCommander}
                 team={setup.team}
-                userName={setup.userName}
+                userName={requestUserName}
                 commanderTimersSize={setup.commanderTimersSize}
                 showTeamExCooldowns={setup.showTeamExCooldowns}
                 userCooldowns={statusUserCooldowns}

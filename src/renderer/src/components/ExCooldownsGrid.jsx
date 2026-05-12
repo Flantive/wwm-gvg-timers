@@ -3,7 +3,15 @@ import { useEffect, useMemo, useState } from 'react'
 const weaponLabelMap = {
   mo_blade: 'Mo Blade (suck)',
   ink_fan: 'Ink Fan (wall)',
+  heal_fan: 'Heal Fan',
   twin_blades: 'Twin Blades',
+}
+const weaponOrder = ['mo_blade', 'heal_fan', 'ink_fan', 'twin_blades']
+const weaponLabelColorMap = {
+  mo_blade: 'text-orange-300',
+  heal_fan: 'text-emerald-300',
+  twin_blades: 'text-violet-300',
+  ink_fan: 'text-sky-300',
 }
 
 function formatTime(totalSeconds) {
@@ -41,6 +49,13 @@ function normalizeWeaponColumns(teamCooldowns) {
       }
     })
     .filter(Boolean)
+    .sort((a, b) => {
+      const aIndex = weaponOrder.indexOf(a.weaponCode)
+      const bIndex = weaponOrder.indexOf(b.weaponCode)
+      const safeA = aIndex === -1 ? Number.MAX_SAFE_INTEGER : aIndex
+      const safeB = bIndex === -1 ? Number.MAX_SAFE_INTEGER : bIndex
+      return safeA - safeB
+    })
 }
 
 function ExCooldownsGrid({ userCooldowns, team }) {
@@ -86,7 +101,13 @@ function ExCooldownsGrid({ userCooldowns, team }) {
     >
       {columns.map((column) => (
         <div key={column.weaponCode} className="bg-white/5 rounded-lg border border-white/10 p-2 space-y-1">
-          <div className="text-[11px] text-emerald-300 font-semibold truncate">{column.label}</div>
+          <div
+            className={`text-[11px] font-semibold truncate ${
+              weaponLabelColorMap[column.weaponCode] ?? 'text-emerald-300'
+            }`}
+          >
+            {column.label}
+          </div>
           {column.players.map((player) => (
             <div key={`${column.weaponCode}-${player.playerName}`} className="flex items-center justify-between gap-2">
               <span className="text-[11px] text-white/80 truncate">{player.playerName}</span>

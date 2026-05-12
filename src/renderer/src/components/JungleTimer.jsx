@@ -81,7 +81,7 @@ function JungleTimer({ gvgScope }) {
   const isPreThirtyWindow = localRemaining > 1800
   const isBossChokingWindow =
     !isPreThirtyWindow && (currentWindowStart === 1800 || currentWindowStart === 1200)
-  const timerLabel = isPreThirtyWindow ? 'Game Start' : isBossChokingWindow ? 'Chicken Choking' : jungleTimerName
+  const timerLabel = isPreThirtyWindow ? 'Game Start' : isBossChokingWindow ? 'Boss Respawn' : jungleTimerName
   const isDanger = countdown <= 30
   const isBlueWarning = countdown <= 60 && countdown > 30
   const timerColorClass =

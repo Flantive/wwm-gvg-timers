@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 
-const roleOptions = ['Commander', 'Member']
 const teamOptions = ['Offense', 'Defense']
 const commanderTimerSizeOptions = ['Big', 'Small']
 const settingsTabs = ['General', 'Keybinds', 'Display']
 const gearOptions = [
   { label: 'Mo Blade (suck)', code: 'mo_blade' },
   { label: 'Ink Fan (wall)', code: 'ink_fan' },
+  { label: 'Heal Fan', code: 'heal_fan' },
   { label: 'Twin Blades', code: 'twin_blades' },
 ]
 const commanderKeybindConfigs = [
@@ -14,12 +14,11 @@ const commanderKeybindConfigs = [
   { field: 'commanderSprintKeybind', label: 'Command: Sprint', fallback: 'Numpad2' },
   { field: 'commanderCarrierDmgKeybind', label: 'Command: Carrier DMG', fallback: 'Numpad3' },
 ]
+const commanderKeybindFields = new Set(commanderKeybindConfigs.map((item) => item.field))
 const exSkillKeybindConfigs = [
   { field: 'firstWeaponKeybind', weaponField: 'firstWeapon', fallbackLabel: 'Weapon 1 EX', fallback: 'Numpad8' },
   { field: 'secondWeaponKeybind', weaponField: 'secondWeapon', fallbackLabel: 'Weapon 2 EX', fallback: 'Numpad9' },
 ]
-const bindableFields = [...exSkillKeybindConfigs.map((item) => item.field), ...commanderKeybindConfigs.map((item) => item.field)]
-const sanitizeAlphaNum = (value) => value.replace(/[^a-zA-Z0-9]/g, '')
 const normalizeCooldownInput = (value) => {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) {
@@ -32,11 +31,16 @@ const normalizeCooldownInput = (value) => {
 function InitialSetupScreen({
   setup,
   setupError,
+  authUserName,
+  authIgn,
+  isCommanderRole,
+  hasGuildWarRole,
+  logoutBusy,
+  onLogout,
   onSetupChange,
   onSubmitSetup,
   onResetSetup,
 }) {
-  const isCommander = setup.mode === 'Commander'
   const [activeTab, setActiveTab] = useState('General')
   const [bindingTarget, setBindingTarget] = useState(null)
   const [keybindError, setKeybindError] = useState('')
@@ -45,6 +49,12 @@ function InitialSetupScreen({
   const pressedKeysRef = useRef(new Set())
   const pendingComboRef = useRef([])
   const finalizeTimerRef = useRef(null)
+  const activeBindableFields = isCommanderRole
+    ? [
+        ...exSkillKeybindConfigs.map((item) => item.field),
+        ...commanderKeybindConfigs.map((item) => item.field),
+      ]
+    : exSkillKeybindConfigs.map((item) => item.field)
 
   useEffect(() => {
     if (!bindingTarget) {
@@ -77,7 +87,7 @@ function InitialSetupScreen({
         const combo = pendingComboRef.current
         if (combo.length > 0) {
           const nextKeybind = combo.join('+')
-          const hasDuplicate = bindableFields.some(
+          const hasDuplicate = activeBindableFields.some(
             (field) => field !== bindingTarget && setup[field] === nextKeybind
           )
 
@@ -106,7 +116,17 @@ function InitialSetupScreen({
       pressedKeysRef.current.clear()
       pendingComboRef.current = []
     }
-  }, [bindingTarget, onSetupChange, setup])
+  }, [activeBindableFields, bindingTarget, onSetupChange, setup])
+
+  useEffect(() => {
+    if (!bindingTarget) {
+      return
+    }
+
+    if (!isCommanderRole && commanderKeybindFields.has(bindingTarget)) {
+      setBindingTarget(null)
+    }
+  }, [bindingTarget, isCommanderRole])
 
   useEffect(() => {
     if (resetPhase !== 'countdown') {
@@ -139,6 +159,10 @@ function InitialSetupScreen({
   }, [resetPhase])
 
   const startBinding = (targetField) => {
+    if (!isCommanderRole && commanderKeybindFields.has(targetField)) {
+      return
+    }
+
     pressedKeysRef.current.clear()
     pendingComboRef.current = []
     setKeybindError('')
@@ -174,9 +198,71 @@ function InitialSetupScreen({
     setResetCountdown(3)
   }
 
+  const normalizedIgn = typeof authIgn === 'string' ? authIgn.trim() : ''
+  const hasValidIgn = Boolean(normalizedIgn) && normalizedIgn.toLowerCase() !== 'null'
+
   return (
     <div className="space-y-0" style={{ WebkitAppRegion: 'no-drag' }}>
       <div className="p-4 space-y-2">
+      <div className="bg-white/5 rounded-xl px-3 py-2 border border-white/10 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-xs text-white/60">
+            Discord:{' '}
+            <span className="text-white/70">{authUserName || 'Unknown user'}</span>
+            {hasValidIgn ? (
+              <span className="text-white font-semibold"> ({normalizedIgn})</span>
+            ) : (
+              <span className="text-amber-300 font-medium">
+                {' '}
+                (not registered to gvg in our Discord server, check #gvg-registration-bot)
+              </span>
+            )}
+          </div>
+          <div className="mt-1 flex flex-wrap gap-2">
+            <span
+              className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 text-[11px] rounded ${
+                isCommanderRole
+                  ? 'text-emerald-300 bg-emerald-500/10'
+                  : 'text-white/60 bg-white/5'
+              }`}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  isCommanderRole ? 'bg-emerald-400' : 'bg-white/40'
+                }`}
+              />
+              Commander
+            </span>
+            <span
+              className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 text-[11px] rounded ${
+                hasGuildWarRole
+                  ? 'text-zinc-200 bg-zinc-500/15'
+                  : 'text-white/60 bg-white/5'
+              }`}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  hasGuildWarRole ? 'bg-zinc-300' : 'bg-white/40'
+                }`}
+              />
+              Guild War
+            </span>
+          </div>
+          {!hasGuildWarRole ? (
+            <div className="mt-2 text-[11px] text-amber-200 border border-amber-400/40 rounded-lg px-2.5 py-2 bg-amber-500/10">
+              You are missing the "Guild War" role. Please go to the "gvg-role" channel on our
+              server and react to the first message to get the role.
+            </div>
+          ) : null}
+        </div>
+        <button
+          onClick={onLogout}
+          disabled={logoutBusy}
+          className="px-2.5 py-1 text-[11px] font-semibold rounded-lg border border-red-500/50 text-red-300 hover:bg-red-500/10 disabled:opacity-60 transition-colors"
+        >
+          Logout
+        </button>
+      </div>
       <div className="px-1 pt-1">
         <div className="flex items-end gap-5">
           {settingsTabs.map((tabName) => {
@@ -204,56 +290,6 @@ function InitialSetupScreen({
 
       {activeTab === 'General' ? (
         <>
-          <div className="bg-white/5 rounded-xl px-3 py-2 border border-white/10 space-y-2">
-            <label className="text-xs text-white/70 block">User Name</label>
-            <input
-              type="text"
-              value={setup.userName}
-              onChange={(event) => onSetupChange('userName', sanitizeAlphaNum(event.target.value))}
-              pattern="[A-Za-z0-9]*"
-              autoComplete="off"
-              className="w-full px-3 py-2 text-sm bg-white/10 border border-white/20 rounded-lg outline-none focus:border-sky-400/70"
-              placeholder="Enter your name"
-            />
-          </div>
-
-          <div className="bg-white/5 rounded-xl px-3 py-2 border border-white/10 space-y-2">
-            <div className="text-xs text-white/70">Mode</div>
-            <div className="flex gap-2">
-              {roleOptions.map((mode) => {
-                const selected = setup.mode === mode
-                return (
-                  <button
-                    key={mode}
-                    onClick={() => onSetupChange('mode', mode)}
-                    className={`flex-1 px-3 py-2 text-xs font-semibold rounded-lg border transition-colors ${
-                      selected
-                        ? '!border-emerald-400 !text-emerald-300'
-                        : 'bg-white/10 border-white/20 text-white/80 hover:bg-white/15'
-                    }`}
-                  >
-                    {mode}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {isCommander ? (
-            <div className="bg-white/5 rounded-xl px-3 py-2 border border-white/10 space-y-2">
-              <label className="text-xs text-white/70 block">Commander API Key</label>
-              <input
-                type="text"
-                value={setup.apiKey}
-                onChange={(event) => onSetupChange('apiKey', sanitizeAlphaNum(event.target.value))}
-                pattern="[A-Za-z0-9]*"
-                autoComplete="off"
-                className="w-full px-3 py-2 text-sm bg-white/10 border border-white/20 rounded-lg outline-none focus:border-sky-400/70"
-                placeholder="Paste API key for POST requests"
-              />
-            </div>
-          ) : null}
-
           <div className="bg-white/5 rounded-xl px-3 py-2 border border-white/10 space-y-2">
             <div className="text-xs text-white/70">Team</div>
             <div className="flex gap-2">
@@ -379,7 +415,7 @@ function InitialSetupScreen({
               <span className="text-right">Keybind</span>
             </div>
             <div className="space-y-1">
-              {commanderKeybindConfigs.map((config) => (
+              {(isCommanderRole ? commanderKeybindConfigs : []).map((config) => (
                 <div key={config.field} className="grid grid-cols-[1fr_140px] gap-2 items-center">
                   <span className="text-sm text-white">{config.label}</span>
                   <button

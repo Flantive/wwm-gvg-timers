@@ -1,14 +1,22 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, Menu, Tray } from 'electron'
+import { app, BrowserWindow, globalShortcut, ipcMain, Menu, Tray, shell } from 'electron'
 import fs from 'node:fs'
+import http from 'node:http'
 import path from 'node:path'
 
 const remoteServerUrl = 'http://217.182.78.238:3333'
 // const remoteServerUrl = 'http://localhost:3333'
+const authServerUrl = 'https://videoalchemy.pl:3334'
+const authLoginUrl = `${authServerUrl}/auth/discord/login`
+const authCallbackHost = '127.0.0.1'
+const authCallbackPort = 33331
+const authCallbackPath = '/auth/discord/callback'
 
 let overlayWindow
 let tray
 let commanderShortcutConfig = {}
 const fallbackShortcutAccelerators = new Set()
+let authCallbackServer = null
+let pendingSessionToken = ''
 
 function normalizeAcceleratorPart(part) {
   const normalized = String(part || '').trim()
@@ -297,6 +305,61 @@ function createTray() {
   tray.setContextMenu(menu)
 }
 
+function getLocalAuthCallbackUrl() {
+  return `http://${authCallbackHost}:${authCallbackPort}${authCallbackPath}`
+}
+
+function sendAuthTokenToRenderer(sessionToken) {
+  if (!overlayWindow || overlayWindow.isDestroyed()) {
+    return
+  }
+
+  overlayWindow.webContents.send('overlay:auth-callback', { sessionToken })
+}
+
+function startAuthCallbackServer() {
+  if (authCallbackServer) {
+    return
+  }
+
+  authCallbackServer = http.createServer((req, res) => {
+    const requestUrl = new URL(req.url || '/', getLocalAuthCallbackUrl())
+
+    if (requestUrl.pathname !== authCallbackPath) {
+      res.statusCode = 404
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+      res.end('Not found')
+      return
+    }
+
+    const sessionToken = requestUrl.searchParams.get('sessionToken')?.trim() ?? ''
+    if (!sessionToken) {
+      res.statusCode = 400
+      res.setHeader('Content-Type', 'text/html; charset=utf-8')
+      res.end('<h3>Login failed</h3><p>Missing session token.</p>')
+      return
+    }
+
+    pendingSessionToken = sessionToken
+    sendAuthTokenToRenderer(sessionToken)
+
+    res.statusCode = 200
+    res.setHeader('Content-Type', 'text/html; charset=utf-8')
+    res.end('<h3>Login successful</h3><p>You can now return to the app.</p>')
+  })
+
+  authCallbackServer.listen(authCallbackPort, authCallbackHost)
+}
+
+function stopAuthCallbackServer() {
+  if (!authCallbackServer) {
+    return
+  }
+
+  authCallbackServer.close()
+  authCallbackServer = null
+}
+
 function normalizeRequestUrl(rawUrl) {
   const value = String(rawUrl ?? '').trim()
   if (!value) {
@@ -314,7 +377,8 @@ function normalizeRequestUrl(rawUrl) {
 
 ipcMain.handle('overlay:http-request', async (_event, requestConfig) => {
   const config = requestConfig ?? {}
-  const response = await fetch(normalizeRequestUrl(config.url), {
+  const resolvedUrl = normalizeRequestUrl(config.url)
+  const response = await fetch(resolvedUrl, {
     method: config.method ?? 'GET',
     headers: config.headers ?? {},
     body: config.body,
@@ -330,6 +394,23 @@ ipcMain.handle('overlay:http-request', async (_event, requestConfig) => {
 })
 
 ipcMain.handle('overlay:get-server-url', () => remoteServerUrl)
+ipcMain.handle('overlay:get-auth-server-url', () => authServerUrl)
+ipcMain.handle('overlay:get-auth-login-url', () => authLoginUrl)
+ipcMain.handle('overlay:get-auth-callback-url', () => getLocalAuthCallbackUrl())
+ipcMain.handle('overlay:get-pending-session-token', () => {
+  const token = pendingSessionToken
+  pendingSessionToken = ''
+  return token
+})
+ipcMain.handle('overlay:open-external', async (_event, rawUrl) => {
+  const urlValue = String(rawUrl ?? '').trim()
+  if (!urlValue) {
+    return false
+  }
+
+  await shell.openExternal(urlValue)
+  return true
+})
 
 ipcMain.on('overlay:set-height', (_event, nextHeight) => {
   if (!overlayWindow || overlayWindow.isDestroyed()) {
@@ -358,6 +439,7 @@ ipcMain.on('overlay:set-commander-hotkeys', (_event, shortcutConfig) => {
 app.whenReady().then(() => {
   createWindow()
   createTray()
+  startAuthCallbackServer()
 
   globalShortcut.register('Ctrl+Shift+T', () => {
     toggleOverlayVisibility()
@@ -367,6 +449,7 @@ app.whenReady().then(() => {
 })
 
 app.on('will-quit', () => {
+  stopAuthCallbackServer()
   unregisterFallbackCommanderHotkeys()
   globalShortcut.unregisterAll()
 })

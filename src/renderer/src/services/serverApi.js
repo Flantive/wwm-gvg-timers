@@ -126,3 +126,31 @@ export async function submitExCooldown(serverUrl, payload, headers) {
     throw new Error(buildHttpError(response, endpoint))
   }
 }
+
+export async function fetchAuthMe(authServerUrl, headers) {
+  const endpoint = '/auth/me'
+  const response = await requestThroughBridge({
+    url: `${authServerUrl}${endpoint}`,
+    method: 'GET',
+    headers,
+  })
+
+  if (!response.ok) {
+    throw new Error(buildHttpError(response, endpoint))
+  }
+
+  return parseJsonBody(response, endpoint)
+}
+
+export async function logoutAuth(authServerUrl, headers) {
+  const endpoint = '/auth/logout'
+  const response = await requestThroughBridge({
+    url: `${authServerUrl}${endpoint}`,
+    method: 'POST',
+    headers,
+  })
+
+  if (!response.ok) {
+    throw new Error(buildHttpError(response, endpoint))
+  }
+}

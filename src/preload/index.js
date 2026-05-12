@@ -6,6 +6,21 @@ const api = {
   getServerUrl() {
     return ipcRenderer.invoke('overlay:get-server-url')
   },
+  getAuthServerUrl() {
+    return ipcRenderer.invoke('overlay:get-auth-server-url')
+  },
+  getAuthLoginUrl() {
+    return ipcRenderer.invoke('overlay:get-auth-login-url')
+  },
+  getAuthCallbackUrl() {
+    return ipcRenderer.invoke('overlay:get-auth-callback-url')
+  },
+  getPendingSessionToken() {
+    return ipcRenderer.invoke('overlay:get-pending-session-token')
+  },
+  openExternal(url) {
+    return ipcRenderer.invoke('overlay:open-external', url)
+  },
   httpRequest(config) {
     return ipcRenderer.invoke('overlay:http-request', config)
   },
@@ -27,6 +42,17 @@ const api = {
     ipcRenderer.on('overlay:commander-hotkey', listener)
     return () => {
       ipcRenderer.removeListener('overlay:commander-hotkey', listener)
+    }
+  },
+  onAuthCallback(callback) {
+    if (typeof callback !== 'function') {
+      return () => {}
+    }
+
+    const listener = (_event, payload) => callback(payload)
+    ipcRenderer.on('overlay:auth-callback', listener)
+    return () => {
+      ipcRenderer.removeListener('overlay:auth-callback', listener)
     }
   },
 }

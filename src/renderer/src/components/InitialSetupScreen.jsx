@@ -17,14 +17,41 @@ const exCooldownDisplayOptions = [
   { code: 'twin_blades', label: 'Twin Blades' },
 ]
 const commanderKeybindConfigs = [
-  { field: 'commanderHealcutKeybind', label: 'Command: Healcut', fallback: 'Numpad1' },
-  { field: 'commanderSprintKeybind', label: 'Command: Sprint', fallback: 'Numpad2' },
-  { field: 'commanderCarrierDmgKeybind', label: 'Command: Carrier DMG', fallback: 'Numpad3' },
+  {
+    field: 'commanderHealcutKeybind',
+    enabledField: 'commanderHealcutKeybindEnabled',
+    label: 'Command: Healcut',
+    fallback: 'Numpad1',
+  },
+  {
+    field: 'commanderSprintKeybind',
+    enabledField: 'commanderSprintKeybindEnabled',
+    label: 'Command: Sprint',
+    fallback: 'Numpad2',
+  },
+  {
+    field: 'commanderCarrierDmgKeybind',
+    enabledField: 'commanderCarrierDmgKeybindEnabled',
+    label: 'Command: Carrier DMG',
+    fallback: 'Numpad3',
+  },
 ]
 const commanderKeybindFields = new Set(commanderKeybindConfigs.map((item) => item.field))
 const exSkillKeybindConfigs = [
-  { field: 'firstWeaponKeybind', weaponField: 'firstWeapon', fallbackLabel: 'Weapon 1 EX', fallback: 'Numpad8' },
-  { field: 'secondWeaponKeybind', weaponField: 'secondWeapon', fallbackLabel: 'Weapon 2 EX', fallback: 'Numpad9' },
+  {
+    field: 'firstWeaponKeybind',
+    enabledField: 'firstWeaponKeybindEnabled',
+    weaponField: 'firstWeapon',
+    fallbackLabel: 'Weapon 1 EX',
+    fallback: 'Numpad8',
+  },
+  {
+    field: 'secondWeaponKeybind',
+    enabledField: 'secondWeaponKeybindEnabled',
+    weaponField: 'secondWeapon',
+    fallbackLabel: 'Weapon 2 EX',
+    fallback: 'Numpad9',
+  },
 ]
 const normalizeCooldownInput = (value) => {
   const parsed = Number(value)
@@ -44,6 +71,8 @@ function InitialSetupScreen({
   latestVersion,
   onOpenUpdate,
   isCommanderRole,
+  isTeamLeaderRole,
+  hasCommanderPermissions,
   hasGuildWarRole,
   logoutBusy,
   onLogout,
@@ -59,7 +88,7 @@ function InitialSetupScreen({
   const pressedKeysRef = useRef(new Set())
   const pendingComboRef = useRef([])
   const finalizeTimerRef = useRef(null)
-  const activeBindableFields = isCommanderRole
+  const activeBindableFields = hasCommanderPermissions
     ? [
         ...exSkillKeybindConfigs.map((item) => item.field),
         ...commanderKeybindConfigs.map((item) => item.field),
@@ -133,10 +162,10 @@ function InitialSetupScreen({
       return
     }
 
-    if (!isCommanderRole && commanderKeybindFields.has(bindingTarget)) {
+    if (!hasCommanderPermissions && commanderKeybindFields.has(bindingTarget)) {
       setBindingTarget(null)
     }
-  }, [bindingTarget, isCommanderRole])
+  }, [bindingTarget, hasCommanderPermissions])
 
   useEffect(() => {
     if (resetPhase !== 'countdown') {
@@ -169,7 +198,7 @@ function InitialSetupScreen({
   }, [resetPhase])
 
   const startBinding = (targetField) => {
-    if (!isCommanderRole && commanderKeybindFields.has(targetField)) {
+    if (!hasCommanderPermissions && commanderKeybindFields.has(targetField)) {
       return
     }
 
@@ -243,12 +272,18 @@ function InitialSetupScreen({
               </span>
             )}
           </div>
-          {isCommanderRole || hasGuildWarRole ? (
+          {isCommanderRole || isTeamLeaderRole || hasGuildWarRole ? (
             <div className="mt-1 flex flex-wrap gap-2">
               {isCommanderRole ? (
                 <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 text-[11px] rounded text-emerald-300 bg-emerald-500/10">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                   Commander
+                </span>
+              ) : null}
+              {isTeamLeaderRole ? (
+                <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 text-[11px] rounded text-sky-300 bg-sky-500/10">
+                  <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                  Team Leader
                 </span>
               ) : null}
               {hasGuildWarRole ? (
@@ -429,18 +464,34 @@ function InitialSetupScreen({
       ) : activeTab === 'Keybinds' ? (
         <div className="space-y-2">
           <div className="bg-white/5 rounded-xl px-3 py-2 border border-white/10 space-y-2">
-            <div className="grid grid-cols-[1fr_140px] gap-2 text-[11px] text-white/60">
+            <div className="grid grid-cols-[22px_1fr_140px] gap-2 text-[11px] text-white/60">
+              <span>On</span>
               <span>Action</span>
               <span className="text-right">Keybind</span>
             </div>
             <div className="space-y-1">
-              {(isCommanderRole ? commanderKeybindConfigs : []).map((config) => (
-                <div key={config.field} className="grid grid-cols-[1fr_140px] gap-2 items-center">
-                  <span className="text-sm text-white">{config.label}</span>
+              {(hasCommanderPermissions ? commanderKeybindConfigs : []).map((config) => (
+                <div key={config.field} className="grid grid-cols-[22px_1fr_140px] gap-2 items-center">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(setup[config.enabledField])}
+                    onChange={(event) => onSetupChange(config.enabledField, event.target.checked)}
+                    className="h-4 w-4 accent-emerald-400"
+                  />
+                  <span
+                    className={`text-sm ${
+                      setup[config.enabledField] ? 'text-white' : 'text-white/40'
+                    }`}
+                  >
+                    {config.label}
+                  </span>
                   <button
+                    disabled={!setup[config.enabledField]}
                     onClick={() => startBinding(config.field)}
                     className={`w-full px-2 py-2 text-[11px] font-semibold rounded-lg border transition-colors whitespace-nowrap ${
-                      bindingTarget === config.field
+                      !setup[config.enabledField]
+                        ? 'border-white/10 text-white/35 bg-white/5 cursor-not-allowed'
+                        : bindingTarget === config.field
                         ? 'border-emerald-400 text-emerald-300 bg-emerald-500/10'
                         : 'border-white/20 text-white/80 bg-white/10 hover:bg-white/15'
                     }`}
@@ -450,12 +501,27 @@ function InitialSetupScreen({
                 </div>
               ))}
               {exSkillKeybindConfigs.map((config) => (
-                <div key={config.field} className="grid grid-cols-[1fr_140px] gap-2 items-center">
-                  <span className="text-sm text-white">{getExKeybindLabel(config)}</span>
+                <div key={config.field} className="grid grid-cols-[22px_1fr_140px] gap-2 items-center">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(setup[config.enabledField])}
+                    onChange={(event) => onSetupChange(config.enabledField, event.target.checked)}
+                    className="h-4 w-4 accent-emerald-400"
+                  />
+                  <span
+                    className={`text-sm ${
+                      setup[config.enabledField] ? 'text-white' : 'text-white/40'
+                    }`}
+                  >
+                    {getExKeybindLabel(config)}
+                  </span>
                   <button
+                    disabled={!setup[config.enabledField]}
                     onClick={() => startBinding(config.field)}
                     className={`w-full px-2 py-2 text-[11px] font-semibold rounded-lg border transition-colors whitespace-nowrap ${
-                      bindingTarget === config.field
+                      !setup[config.enabledField]
+                        ? 'border-white/10 text-white/35 bg-white/5 cursor-not-allowed'
+                        : bindingTarget === config.field
                         ? 'border-emerald-400 text-emerald-300 bg-emerald-500/10'
                         : 'border-white/20 text-white/80 bg-white/10 hover:bg-white/15'
                     }`}

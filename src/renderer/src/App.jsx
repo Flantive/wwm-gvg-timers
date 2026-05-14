@@ -23,10 +23,10 @@ const legacyWeaponCodeMap = {
   'Twin Blades': 'twin_blades',
 }
 const authWeaponCodeMap = {
-  'Inkwell Fan': 'ink_fan',
-  'Panacea Fan': 'heal_fan',
-  'Thundercry Blade': 'mo_blade',
-  'Infernal Twinblades': 'twin_blades',
+  'inkwell fan': 'ink_fan',
+  'panacea fan': 'heal_fan',
+  'thundercry blade': 'mo_blade',
+  'infernal twinblades': 'twin_blades',
 }
 const exCooldownDisplayOrder = ['mo_blade', 'heal_fan', 'ink_fan', 'twin_blades']
 const githubRepoReleasesUrl = 'https://github.com/Flantive/wwm-gvg-timers/releases'
@@ -35,6 +35,7 @@ const githubReleasesApiUrl = 'https://api.github.com/repos/Flantive/wwm-gvg-time
 const setupStorageKey = 'wwm-overlay-setup'
 const authStorageKey = 'wwm-overlay-auth'
 const commanderRoleId = '1459682165863219333'
+const teamLeaderRoleId = '1498705115279003748'
 const guildWarRoleId = '1498694492507734056'
 const commanderBuffKeybindFields = [
   'commanderHealcutKeybind',
@@ -66,6 +67,28 @@ const normalizeKeybind = (value, fallback) => {
   }
 
   return Array.from(new Set(parts)).join('+')
+}
+
+const mapAuthWeaponNameToCode = (weaponName) => {
+  const rawName =
+    typeof weaponName === 'string'
+      ? weaponName
+      : typeof weaponName?.name === 'string'
+        ? weaponName.name
+        : typeof weaponName?.label === 'string'
+          ? weaponName.label
+          : ''
+
+  if (!rawName) {
+    return ''
+  }
+
+  const normalizedName = rawName.trim().toLowerCase()
+  if (!normalizedName) {
+    return ''
+  }
+
+  return authWeaponCodeMap[normalizedName] ?? ''
 }
 
 const normalizeSemver = (value) => {
@@ -144,9 +167,14 @@ const defaultSetup = {
   secondWeaponCooldown: 120,
   firstWeaponKeybind: 'Numpad8',
   secondWeaponKeybind: 'Numpad9',
+  firstWeaponKeybindEnabled: true,
+  secondWeaponKeybindEnabled: true,
   commanderHealcutKeybind: 'Numpad1',
   commanderSprintKeybind: 'Numpad2',
   commanderCarrierDmgKeybind: 'Numpad3',
+  commanderHealcutKeybindEnabled: true,
+  commanderSprintKeybindEnabled: true,
+  commanderCarrierDmgKeybindEnabled: true,
   transparency: 100,
 }
 
@@ -243,6 +271,26 @@ function loadSavedSetup() {
       parsed?.setup?.commanderCarrierDmgKeybind,
       defaultSetup.commanderCarrierDmgKeybind
     )
+    const firstWeaponKeybindEnabled =
+      typeof parsed?.setup?.firstWeaponKeybindEnabled === 'boolean'
+        ? parsed.setup.firstWeaponKeybindEnabled
+        : defaultSetup.firstWeaponKeybindEnabled
+    const secondWeaponKeybindEnabled =
+      typeof parsed?.setup?.secondWeaponKeybindEnabled === 'boolean'
+        ? parsed.setup.secondWeaponKeybindEnabled
+        : defaultSetup.secondWeaponKeybindEnabled
+    const commanderHealcutKeybindEnabled =
+      typeof parsed?.setup?.commanderHealcutKeybindEnabled === 'boolean'
+        ? parsed.setup.commanderHealcutKeybindEnabled
+        : defaultSetup.commanderHealcutKeybindEnabled
+    const commanderSprintKeybindEnabled =
+      typeof parsed?.setup?.commanderSprintKeybindEnabled === 'boolean'
+        ? parsed.setup.commanderSprintKeybindEnabled
+        : defaultSetup.commanderSprintKeybindEnabled
+    const commanderCarrierDmgKeybindEnabled =
+      typeof parsed?.setup?.commanderCarrierDmgKeybindEnabled === 'boolean'
+        ? parsed.setup.commanderCarrierDmgKeybindEnabled
+        : defaultSetup.commanderCarrierDmgKeybindEnabled
 
     return {
       setup: {
@@ -265,9 +313,14 @@ function loadSavedSetup() {
         ),
         firstWeaponKeybind,
         secondWeaponKeybind,
+        firstWeaponKeybindEnabled,
+        secondWeaponKeybindEnabled,
         commanderHealcutKeybind,
         commanderSprintKeybind,
         commanderCarrierDmgKeybind,
+        commanderHealcutKeybindEnabled,
+        commanderSprintKeybindEnabled,
+        commanderCarrierDmgKeybindEnabled,
         transparency: clampTransparency(
           Number.isFinite(Number(parsed?.setup?.transparency))
             ? Number(parsed.setup.transparency)
@@ -314,6 +367,8 @@ function App() {
   const panelAlpha = 0.05 * transparencyRatio
 
   const isCommander = authRoles.includes(commanderRoleId)
+  const isTeamLeader = authRoles.includes(teamLeaderRoleId)
+  const hasCommanderPermissions = isCommander || isTeamLeader
   const hasGuildWarRole = authRoles.includes(guildWarRoleId)
   const normalizedIgnForRequests = typeof authIgn === 'string' ? authIgn.trim() : ''
   const hasUsableIgnForRequests =
@@ -324,15 +379,25 @@ function App() {
     : authUserName.trim()
   const TeamTimers = setup.team === 'Defense' ? DefenseTimers : OffenseTimers
   const localHotkeyBindings = {
-    ...(isCommander
+    ...(hasCommanderPermissions
       ? {
-          healcut: setup.commanderHealcutKeybind,
-          sprint: setup.commanderSprintKeybind,
-          carrierdmg: setup.commanderCarrierDmgKeybind,
+          ...(setup.commanderHealcutKeybindEnabled
+            ? { healcut: setup.commanderHealcutKeybind }
+            : {}),
+          ...(setup.commanderSprintKeybindEnabled
+            ? { sprint: setup.commanderSprintKeybind }
+            : {}),
+          ...(setup.commanderCarrierDmgKeybindEnabled
+            ? { carrierdmg: setup.commanderCarrierDmgKeybind }
+            : {}),
         }
       : {}),
-    ...(setup.firstWeapon ? { ex_weapon_1: setup.firstWeaponKeybind } : {}),
-    ...(setup.secondWeapon ? { ex_weapon_2: setup.secondWeaponKeybind } : {}),
+    ...(setup.firstWeapon && setup.firstWeaponKeybindEnabled
+      ? { ex_weapon_1: setup.firstWeaponKeybind }
+      : {}),
+    ...(setup.secondWeapon && setup.secondWeaponKeybindEnabled
+      ? { ex_weapon_2: setup.secondWeaponKeybind }
+      : {}),
   }
   const canContinue = true
 
@@ -532,26 +597,13 @@ function App() {
           ? resolvedRolesRaw.map((item) => String(item))
           : []
         let mappedWeapons = null
-        if (Array.isArray(resolvedWeaponsRaw)) {
-          const trimmedWeapons = resolvedWeaponsRaw
+        const hasWeaponsArray = Array.isArray(resolvedWeaponsRaw)
+        if (hasWeaponsArray) {
+          const [firstMapped = '', secondMappedRaw = ''] = resolvedWeaponsRaw
             .slice(0, 2)
-            .map((item) => (typeof item === 'string' ? item.trim() : ''))
-
-          const hasUnknownWeapon = trimmedWeapons.some(
-            (weaponName) => weaponName && !authWeaponCodeMap[weaponName]
-          )
-
-          if (hasUnknownWeapon) {
-            mappedWeapons = ['', '']
-          } else {
-            const [firstMapped = '', secondMapped = ''] = trimmedWeapons.map(
-              (weaponName) => authWeaponCodeMap[weaponName] ?? ''
-            )
-            mappedWeapons =
-              firstMapped && secondMapped === firstMapped
-                ? [firstMapped, '']
-                : [firstMapped, secondMapped]
-          }
+            .map(mapAuthWeaponNameToCode)
+          const secondMapped = firstMapped && secondMappedRaw === firstMapped ? '' : secondMappedRaw
+          mappedWeapons = [firstMapped, secondMapped]
         } else if (resolvedWeaponsRaw == null) {
           mappedWeapons = ['', '']
         }
@@ -653,30 +705,41 @@ function App() {
     }
 
     const hotkeyConfig = {}
-    if (isCommander) {
-      hotkeyConfig.healcut = setup.commanderHealcutKeybind
-      hotkeyConfig.sprint = setup.commanderSprintKeybind
-      hotkeyConfig.carrierdmg = setup.commanderCarrierDmgKeybind
+    if (hasCommanderPermissions) {
+      if (setup.commanderHealcutKeybindEnabled) {
+        hotkeyConfig.healcut = setup.commanderHealcutKeybind
+      }
+      if (setup.commanderSprintKeybindEnabled) {
+        hotkeyConfig.sprint = setup.commanderSprintKeybind
+      }
+      if (setup.commanderCarrierDmgKeybindEnabled) {
+        hotkeyConfig.carrierdmg = setup.commanderCarrierDmgKeybind
+      }
     }
 
-    if (setup.firstWeapon) {
+    if (setup.firstWeapon && setup.firstWeaponKeybindEnabled) {
       hotkeyConfig.ex_weapon_1 = setup.firstWeaponKeybind
     }
 
-    if (setup.secondWeapon) {
+    if (setup.secondWeapon && setup.secondWeaponKeybindEnabled) {
       hotkeyConfig.ex_weapon_2 = setup.secondWeaponKeybind
     }
 
     window.api.setCommanderHotkeys(hotkeyConfig)
   }, [
-    isCommander,
+    hasCommanderPermissions,
     isConfigured,
     setup.firstWeapon,
     setup.firstWeaponKeybind,
+    setup.firstWeaponKeybindEnabled,
     setup.secondWeapon,
     setup.secondWeaponKeybind,
+    setup.secondWeaponKeybindEnabled,
+    setup.commanderCarrierDmgKeybindEnabled,
     setup.commanderCarrierDmgKeybind,
+    setup.commanderHealcutKeybindEnabled,
     setup.commanderHealcutKeybind,
+    setup.commanderSprintKeybindEnabled,
     setup.commanderSprintKeybind,
   ])
 
@@ -870,6 +933,8 @@ function App() {
               latestVersion={updateInfo.latestVersion}
               onOpenUpdate={openUpdateReleasePage}
               isCommanderRole={isCommander}
+              isTeamLeaderRole={isTeamLeader}
+              hasCommanderPermissions={hasCommanderPermissions}
               hasGuildWarRole={hasGuildWarRole}
               logoutBusy={logoutBusy}
               onLogout={handleLogout}
@@ -879,7 +944,7 @@ function App() {
             />
           ) : (
             <GvgStatusGate
-              mode={isCommander ? 'Commander' : 'Member'}
+              mode={hasCommanderPermissions ? 'Commander' : 'Member'}
               serverUrl={serverUrl}
               postHeaders={postHeaders}
               refreshSeq={statusRefreshSeq}
@@ -896,16 +961,22 @@ function App() {
                 gvgScope={gvgScope}
                 serverUrl={serverUrl}
                 postHeaders={postHeaders}
-                isCommander={isCommander}
+                isCommander={hasCommanderPermissions}
                 team={setup.team}
                 userName={requestUserName}
                 commanderTimersSize={setup.commanderTimersSize}
                 visibleExWeapons={setup.visibleExWeapons}
                 userCooldowns={statusUserCooldowns}
                 commanderBuffKeybinds={{
-                  healcut: setup.commanderHealcutKeybind,
-                  sprint: setup.commanderSprintKeybind,
-                  carrierdmg: setup.commanderCarrierDmgKeybind,
+                  healcut: setup.commanderHealcutKeybindEnabled
+                    ? setup.commanderHealcutKeybind
+                    : '',
+                  sprint: setup.commanderSprintKeybindEnabled
+                    ? setup.commanderSprintKeybind
+                    : '',
+                  carrierdmg: setup.commanderCarrierDmgKeybindEnabled
+                    ? setup.commanderCarrierDmgKeybind
+                    : '',
                 }}
                 exHotkeyActions={{
                   ex_weapon_1: {

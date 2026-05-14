@@ -1,6 +1,14 @@
-function WelcomeScreen({ loginError, loginBusy, onLogin }) {
+import UpdateAvailableNotice from './UpdateAvailableNotice'
+
+function WelcomeScreen({ loginError, loginBusy, onLogin, updateAvailable, latestVersion, onOpenUpdate }) {
   return (
     <div className="p-4 space-y-3" style={{ WebkitAppRegion: 'no-drag' }}>
+      <UpdateAvailableNotice
+        updateAvailable={updateAvailable}
+        latestVersion={latestVersion}
+        onOpenUpdate={onOpenUpdate}
+      />
+
       <div className="bg-white/5 rounded-xl px-3 py-3 border border-white/10 space-y-2">
         <div className="text-sm font-semibold text-white">Welcome</div>
         <div className="text-xs text-white/70">

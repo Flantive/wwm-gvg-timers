@@ -37,9 +37,11 @@ function OffenseTimers(props) {
           compact={isSmall}
         />
       </div>
-      {props.showTeamExCooldowns ? (
-        <ExCooldownsGrid userCooldowns={props.userCooldowns} team={props.team} />
-      ) : null}
+      <ExCooldownsGrid
+        userCooldowns={props.userCooldowns}
+        team={props.team}
+        visibleWeaponCodes={props.visibleExWeapons}
+      />
     </TimersScreen>
   )
 }

@@ -6,12 +6,6 @@ import GvgStatusGate from './components/GvgStatusGate'
 import WelcomeScreen from './components/WelcomeScreen'
 import { fetchAuthMe, logoutAuth } from './services/serverApi'
 
-const initialTimers = [
-  { id: 1, name: 'Com: Healcut', duration: 300, remaining: 300, isRunning: false },
-  // { id: 2, name: 'Objective Capture', duration: 180, remaining: 180, isRunning: false },
-  // { id: 3, name: 'Buff / Buff Cooldown', duration: 90, remaining: 90, isRunning: false },
-  // { id: 4, name: 'Tower Push Timer', duration: 240, remaining: 240, isRunning: false },
-]
 const baseOverlayWidth = 380
 const weaponOptions = [
   { label: 'Mo Blade (suck)', code: 'mo_blade' },
@@ -34,6 +28,9 @@ const authWeaponCodeMap = {
   'Thundercry Blade': 'mo_blade',
   'Infernal Twinblades': 'twin_blades',
 }
+const exCooldownDisplayOrder = ['mo_blade', 'heal_fan', 'ink_fan', 'twin_blades']
+const githubRepoReleasesUrl = 'https://github.com/Flantive/wwm-gvg-timers/releases'
+const githubReleasesApiUrl = 'https://api.github.com/repos/Flantive/wwm-gvg-timers/releases?per_page=30'
 
 const setupStorageKey = 'wwm-overlay-setup'
 const authStorageKey = 'wwm-overlay-auth'
@@ -71,11 +68,76 @@ const normalizeKeybind = (value, fallback) => {
   return Array.from(new Set(parts)).join('+')
 }
 
+const normalizeSemver = (value) => {
+  if (typeof value !== 'string') {
+    return ''
+  }
+
+  const trimmed = value.trim().replace(/^v/i, '')
+  const match = trimmed.match(/^(\d+)\.(\d+)\.(\d+)$/)
+  if (!match) {
+    return ''
+  }
+
+  return `${Number(match[1])}.${Number(match[2])}.${Number(match[3])}`
+}
+
+const compareSemver = (left, right) => {
+  const leftParts = normalizeSemver(left).split('.').map((part) => Number(part))
+  const rightParts = normalizeSemver(right).split('.').map((part) => Number(part))
+
+  if (leftParts.length !== 3 || rightParts.length !== 3) {
+    return 0
+  }
+
+  for (let index = 0; index < 3; index += 1) {
+    if (leftParts[index] > rightParts[index]) {
+      return 1
+    }
+    if (leftParts[index] < rightParts[index]) {
+      return -1
+    }
+  }
+
+  return 0
+}
+
+const getNewestStableRelease = (releasesPayload) => {
+  if (!Array.isArray(releasesPayload)) {
+    return null
+  }
+
+  let newestRelease = null
+  let newestVersion = ''
+
+  for (const release of releasesPayload) {
+    if (!release || release.draft || release.prerelease) {
+      continue
+    }
+
+    const version = normalizeSemver(release.tag_name)
+    if (!version) {
+      continue
+    }
+
+    if (!newestVersion || compareSemver(version, newestVersion) > 0) {
+      newestVersion = version
+      newestRelease = release
+    }
+  }
+
+  if (!newestRelease || !newestVersion) {
+    return null
+  }
+
+  return { release: newestRelease, version: newestVersion }
+}
+
 const defaultSetup = {
   discordUserName: '',
   team: 'Offense',
   commanderTimersSize: 'Small',
-  showTeamExCooldowns: true,
+  visibleExWeapons: ['mo_blade'],
   firstWeapon: '',
   secondWeapon: '',
   firstWeaponCooldown: 120,
@@ -126,10 +188,24 @@ function loadSavedSetup() {
     const parsed = JSON.parse(raw)
     const team = parsed?.setup?.team === 'Defense' ? 'Defense' : 'Offense'
     const commanderTimersSize = parsed?.setup?.commanderTimersSize === 'Big' ? 'Big' : 'Small'
-    const showTeamExCooldowns =
+    const savedVisibleExWeapons = Array.isArray(parsed?.setup?.visibleExWeapons)
+      ? parsed.setup.visibleExWeapons.map((item) => String(item))
+      : null
+    const legacyShowTeamExCooldowns =
       typeof parsed?.setup?.showTeamExCooldowns === 'boolean'
         ? parsed.setup.showTeamExCooldowns
-        : true
+        : null
+    const visibleExWeapons = exCooldownDisplayOrder.filter((weaponCode) => {
+      if (savedVisibleExWeapons) {
+        return savedVisibleExWeapons.includes(weaponCode)
+      }
+
+      if (legacyShowTeamExCooldowns != null) {
+        return legacyShowTeamExCooldowns ? defaultSetup.visibleExWeapons.includes(weaponCode) : false
+      }
+
+      return defaultSetup.visibleExWeapons.includes(weaponCode)
+    })
     const legacySelectedGear = Array.isArray(parsed?.setup?.selectedGear) ? parsed.setup.selectedGear : []
     const firstWeaponRaw = parsed?.setup?.firstWeapon ?? legacyWeaponCodeMap[legacySelectedGear[0]] ?? ''
     const secondWeaponRaw = parsed?.setup?.secondWeapon ?? legacyWeaponCodeMap[legacySelectedGear[1]] ?? ''
@@ -176,7 +252,7 @@ function loadSavedSetup() {
             : '',
         team,
         commanderTimersSize,
-        showTeamExCooldowns,
+        visibleExWeapons,
         firstWeapon,
         secondWeapon,
         firstWeaponCooldown: normalizeCooldown(
@@ -207,7 +283,6 @@ function loadSavedSetup() {
 
 function App() {
   const savedAuth = loadSavedAuth()
-  const [timers, setTimers] = useState(initialTimers)
   const [, setGvgRunning] = useState(false)
   const [gvgScope, setGvgScope] = useState(null)
   const [statusUserCooldowns, setStatusUserCooldowns] = useState(null)
@@ -228,6 +303,12 @@ function App() {
   const [setupError, setSetupError] = useState('')
   const [setup, setSetup] = useState(() => loadSavedSetup().setup)
   const [statusRefreshSeq, setStatusRefreshSeq] = useState(0)
+  const [appVersion, setAppVersion] = useState('')
+  const [updateInfo, setUpdateInfo] = useState({
+    updateAvailable: false,
+    latestVersion: '',
+    releaseUrl: githubRepoReleasesUrl,
+  })
   const overlayContentRef = useRef(null)
   const transparencyRatio = clampTransparency(setup.transparency) / 100
   const panelAlpha = 0.05 * transparencyRatio
@@ -335,6 +416,83 @@ function App() {
       if (typeof unsubscribeAuthCallback === 'function') {
         unsubscribeAuthCallback()
       }
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+
+    const fetchGithubReleases = async () => {
+      if (window.api?.httpRequest) {
+        const bridgeResponse = await window.api.httpRequest({
+          url: githubReleasesApiUrl,
+          method: 'GET',
+          headers: {
+            Accept: 'application/vnd.github+json',
+            'User-Agent': 'wwm-gvg-timers',
+          },
+        })
+
+        if (!bridgeResponse?.ok) {
+          return null
+        }
+
+        return JSON.parse(bridgeResponse.bodyText || '[]')
+      }
+
+      const response = await fetch(githubReleasesApiUrl, {
+        headers: {
+          Accept: 'application/vnd.github+json',
+        },
+      })
+
+      if (!response.ok) {
+        return null
+      }
+
+      return response.json()
+    }
+
+    const checkGithubReleaseUpdate = async () => {
+      const localVersionRaw = await window.api?.getAppVersion?.()
+      const localVersion = normalizeSemver(localVersionRaw)
+      if (active && localVersion) {
+        setAppVersion(localVersion)
+      }
+      if (!localVersion) {
+        return
+      }
+
+      const releasesPayload = await fetchGithubReleases()
+      if (!Array.isArray(releasesPayload)) {
+        return
+      }
+
+      const newestStable = getNewestStableRelease(releasesPayload)
+      if (!newestStable) {
+        return
+      }
+
+      const { release, version: latestVersion } = newestStable
+      const hasNewerVersion = compareSemver(latestVersion, localVersion) > 0
+      if (!active) {
+        return
+      }
+
+      setUpdateInfo({
+        updateAvailable: hasNewerVersion,
+        latestVersion,
+        releaseUrl:
+          typeof release?.html_url === 'string' && release.html_url.trim()
+            ? release.html_url.trim()
+            : githubRepoReleasesUrl,
+      })
+    }
+
+    checkGithubReleaseUpdate().catch(() => {})
+
+    return () => {
+      active = false
     }
   }, [])
 
@@ -529,17 +687,6 @@ function App() {
     }
 
     setStatusUserCooldowns(status.userCooldowns ?? null)
-
-    const nextTimers =
-      status.timers ??
-      status.raw?.gvgScope?.timers ??
-      status.raw?.gvgScope?.data?.timers ??
-      status.raw?.data?.timers ??
-      null
-
-    if (Array.isArray(nextTimers)) {
-      setTimers(nextTimers)
-    }
   }, [])
 
   const postHeaders = useCallback(() => {
@@ -613,7 +760,6 @@ function App() {
     setIsConfigured(false)
     setGvgRunning(false)
     setGvgScope(null)
-    setTimers(initialTimers)
   }
 
   const openDiscordLogin = async () => {
@@ -662,6 +808,11 @@ function App() {
     setStatusRefreshSeq((prev) => prev + 1)
   }, [])
 
+  const openUpdateReleasePage = useCallback(() => {
+    const targetUrl = updateInfo.releaseUrl || githubRepoReleasesUrl
+    void window.api?.openExternal?.(targetUrl)
+  }, [updateInfo.releaseUrl])
+
   return (
     <div className="w-screen h-screen overflow-hidden">
       <div
@@ -683,7 +834,12 @@ function App() {
             className="px-3 py-2 bg-black/90 flex items-center justify-between border-b border-white/10 cursor-move"
             style={{ WebkitAppRegion: 'drag' }}
           >
-            <h1 className="text-sm font-semibold tracking-wide">WWM GvG Timers</h1>
+            <h1 className="text-sm font-semibold tracking-wide flex items-baseline gap-1.5">
+              <span>WWM GvG Timers</span>
+              {appVersion ? (
+                <span className="text-[10px] font-normal text-white/45">v{appVersion}</span>
+              ) : null}
+            </h1>
             <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' }}>
               <span className="text-[10px] text-white/60">Ctrl+Shift+T</span>
               <button
@@ -700,6 +856,9 @@ function App() {
               loginError={loginError}
               loginBusy={loginBusy}
               onLogin={openDiscordLogin}
+              updateAvailable={updateInfo.updateAvailable}
+              latestVersion={updateInfo.latestVersion}
+              onOpenUpdate={openUpdateReleasePage}
             />
           ) : !isConfigured ? (
             <InitialSetupScreen
@@ -707,6 +866,9 @@ function App() {
               setupError={setupError}
               authUserName={setup.discordUserName || authUserName}
               authIgn={authIgn}
+              updateAvailable={updateInfo.updateAvailable}
+              latestVersion={updateInfo.latestVersion}
+              onOpenUpdate={openUpdateReleasePage}
               isCommanderRole={isCommander}
               hasGuildWarRole={hasGuildWarRole}
               logoutBusy={logoutBusy}
@@ -731,7 +893,6 @@ function App() {
               }}
             >
               <TeamTimers
-                timers={timers}
                 gvgScope={gvgScope}
                 serverUrl={serverUrl}
                 postHeaders={postHeaders}
@@ -739,7 +900,7 @@ function App() {
                 team={setup.team}
                 userName={requestUserName}
                 commanderTimersSize={setup.commanderTimersSize}
-                showTeamExCooldowns={setup.showTeamExCooldowns}
+                visibleExWeapons={setup.visibleExWeapons}
                 userCooldowns={statusUserCooldowns}
                 commanderBuffKeybinds={{
                   healcut: setup.commanderHealcutKeybind,

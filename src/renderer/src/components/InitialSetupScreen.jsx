@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import UpdateAvailableNotice from './UpdateAvailableNotice'
 
 const teamOptions = ['Offense', 'Defense']
 const commanderTimerSizeOptions = ['Big', 'Small']
@@ -8,6 +9,12 @@ const gearOptions = [
   { label: 'Ink Fan (wall)', code: 'ink_fan' },
   { label: 'Heal Fan', code: 'heal_fan' },
   { label: 'Twin Blades', code: 'twin_blades' },
+]
+const exCooldownDisplayOptions = [
+  { code: 'mo_blade', label: 'Mo Blade (suck)' },
+  { code: 'heal_fan', label: 'Heal Fan' },
+  { code: 'ink_fan', label: 'Ink Fan (wall)' },
+  { code: 'twin_blades', label: 'Twin Blades' },
 ]
 const commanderKeybindConfigs = [
   { field: 'commanderHealcutKeybind', label: 'Command: Healcut', fallback: 'Numpad1' },
@@ -33,6 +40,9 @@ function InitialSetupScreen({
   setupError,
   authUserName,
   authIgn,
+  updateAvailable,
+  latestVersion,
+  onOpenUpdate,
   isCommanderRole,
   hasGuildWarRole,
   logoutBusy,
@@ -200,11 +210,26 @@ function InitialSetupScreen({
 
   const normalizedIgn = typeof authIgn === 'string' ? authIgn.trim() : ''
   const hasValidIgn = Boolean(normalizedIgn) && normalizedIgn.toLowerCase() !== 'null'
+  const visibleExWeaponSet = new Set(
+    Array.isArray(setup.visibleExWeapons) ? setup.visibleExWeapons : []
+  )
+
+  const toggleVisibleExWeapon = (weaponCode) => {
+    const nextVisible = exCooldownDisplayOptions
+      .map((option) => option.code)
+      .filter((code) => {
+        if (code === weaponCode) {
+          return !visibleExWeaponSet.has(code)
+        }
+        return visibleExWeaponSet.has(code)
+      })
+
+    onSetupChange('visibleExWeapons', nextVisible)
+  }
 
   return (
     <div className="space-y-0" style={{ WebkitAppRegion: 'no-drag' }}>
-      <div className="p-4 space-y-2">
-      <div className="bg-white/5 rounded-xl px-3 py-2 border border-white/10 flex items-start justify-between gap-2">
+      <div className="px-3 py-2 border-b border-white/10 flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="text-xs text-white/60">
             Discord:{' '}
@@ -218,40 +243,20 @@ function InitialSetupScreen({
               </span>
             )}
           </div>
-          <div className="mt-1 flex flex-wrap gap-2">
-            <span
-              className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 text-[11px] rounded ${
-                isCommanderRole
-                  ? 'text-emerald-300 bg-emerald-500/10'
-                  : 'text-white/60 bg-white/5'
-              }`}
-            >
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  isCommanderRole ? 'bg-emerald-400' : 'bg-white/40'
-                }`}
-              />
-              Commander
-            </span>
-            <span
-              className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 text-[11px] rounded ${
-                hasGuildWarRole
-                  ? 'text-zinc-200 bg-zinc-500/15'
-                  : 'text-white/60 bg-white/5'
-              }`}
-            >
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  hasGuildWarRole ? 'bg-zinc-300' : 'bg-white/40'
-                }`}
-              />
-              Guild War
-            </span>
-          </div>
-          {!hasGuildWarRole ? (
-            <div className="mt-2 text-[11px] text-amber-200 border border-amber-400/40 rounded-lg px-2.5 py-2 bg-amber-500/10">
-              You are missing the "Guild War" role. Please go to the "gvg-role" channel on our
-              server and react to the first message to get the role.
+          {isCommanderRole || hasGuildWarRole ? (
+            <div className="mt-1 flex flex-wrap gap-2">
+              {isCommanderRole ? (
+                <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 text-[11px] rounded text-emerald-300 bg-emerald-500/10">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  Commander
+                </span>
+              ) : null}
+              {hasGuildWarRole ? (
+                <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 text-[11px] rounded text-zinc-200 bg-zinc-500/15">
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-300" />
+                  Guild War
+                </span>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -263,6 +268,20 @@ function InitialSetupScreen({
           Logout
         </button>
       </div>
+
+      <div className="p-4 space-y-2">
+      <UpdateAvailableNotice
+        updateAvailable={updateAvailable}
+        latestVersion={latestVersion}
+        onOpenUpdate={onOpenUpdate}
+      />
+      {!hasGuildWarRole ? (
+        <div className="text-[11px] text-amber-200 border border-amber-400/40 rounded-lg px-2.5 py-2 bg-amber-500/10">
+          You are missing the "Guild War" role. Please go to the "gvg-role" channel on our
+          server and react to the first message to get the role.
+        </div>
+      ) : null}
+
       <div className="px-1 pt-1">
         <div className="flex items-end gap-5">
           {settingsTabs.map((tabName) => {
@@ -477,16 +496,24 @@ function InitialSetupScreen({
             </div>
           </div>
 
-          <div className="bg-white/5 rounded-xl px-3 py-2 border border-white/10">
-            <label className="flex items-center gap-2 text-xs text-white/80">
-              <input
-                type="checkbox"
-                checked={Boolean(setup.showTeamExCooldowns)}
-                onChange={(event) => onSetupChange('showTeamExCooldowns', event.target.checked)}
-                className="h-4 w-4 accent-emerald-400"
-              />
-              <span>Show EX cooldowns of your team</span>
-            </label>
+          <div className="bg-white/5 rounded-xl px-3 py-2 border border-white/10 space-y-2">
+            <div className="text-xs text-white/70">Visible Team EX Cooldowns</div>
+            <div className="grid grid-cols-2 gap-2">
+              {exCooldownDisplayOptions.map((option) => {
+                const checked = visibleExWeaponSet.has(option.code)
+                return (
+                  <label key={option.code} className="flex items-center gap-2 text-xs text-white/80">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleVisibleExWeapon(option.code)}
+                      className="h-4 w-4 accent-emerald-400"
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                )
+              })}
+            </div>
           </div>
 
           <div className="bg-zinc-900 rounded-xl px-3 py-2 border border-white/10 space-y-2">

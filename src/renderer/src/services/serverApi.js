@@ -19,6 +19,8 @@ function parseJsonBody(response, endpoint) {
   }
 }
 
+const inFlightStatusRequests = new Map()
+
 export async function requestThroughBridge(config) {
   const dedicatedBridgeRequest = window.wwmBridge?.httpRequest
   if (typeof dedicatedBridgeRequest === 'function') {
@@ -43,24 +45,37 @@ export async function requestThroughBridge(config) {
 
 export async function fetchGvgStatus(serverUrl, headers) {
   const endpoint = '/wwmapi/status'
-  const response = await requestThroughBridge({
-    url: `${serverUrl}${endpoint}`,
-    method: 'GET',
-    headers,
+  const requestKey = `${serverUrl}|${JSON.stringify(headers ?? {})}`
+  const existingRequest = inFlightStatusRequests.get(requestKey)
+  if (existingRequest) {
+    return existingRequest
+  }
+
+  const requestPromise = (async () => {
+    const response = await requestThroughBridge({
+      url: `${serverUrl}${endpoint}`,
+      method: 'GET',
+      headers,
+    })
+
+    if (!response.ok) {
+      throw new Error(buildHttpError(response, endpoint))
+    }
+
+    const payload = parseJsonBody(response, endpoint)
+    return {
+      gvgRunning: Boolean(payload?.gvgRunning),
+      gvgScope: payload?.gvgScope ?? null,
+      timers: Array.isArray(payload?.timers) ? payload.timers : null,
+      userCooldowns: payload?.userCooldowns ?? payload?.gvgScope?.userCooldowns ?? null,
+      raw: payload ?? null,
+    }
+  })().finally(() => {
+    inFlightStatusRequests.delete(requestKey)
   })
 
-  if (!response.ok) {
-    throw new Error(buildHttpError(response, endpoint))
-  }
-
-  const payload = parseJsonBody(response, endpoint)
-  return {
-    gvgRunning: Boolean(payload?.gvgRunning),
-    gvgScope: payload?.gvgScope ?? null,
-    timers: Array.isArray(payload?.timers) ? payload.timers : null,
-    userCooldowns: payload?.userCooldowns ?? payload?.gvgScope?.userCooldowns ?? null,
-    raw: payload ?? null,
-  }
+  inFlightStatusRequests.set(requestKey, requestPromise)
+  return requestPromise
 }
 
 export async function startGvg(serverUrl, additionalTime, headers) {

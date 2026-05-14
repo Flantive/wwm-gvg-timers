@@ -15,6 +15,9 @@ const api = {
   getAuthCallbackUrl() {
     return ipcRenderer.invoke('overlay:get-auth-callback-url')
   },
+  getAppVersion() {
+    return ipcRenderer.invoke('overlay:get-app-version')
+  },
   getPendingSessionToken() {
     return ipcRenderer.invoke('overlay:get-pending-session-token')
   },

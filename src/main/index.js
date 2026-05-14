@@ -397,6 +397,7 @@ ipcMain.handle('overlay:get-server-url', () => remoteServerUrl)
 ipcMain.handle('overlay:get-auth-server-url', () => authServerUrl)
 ipcMain.handle('overlay:get-auth-login-url', () => authLoginUrl)
 ipcMain.handle('overlay:get-auth-callback-url', () => getLocalAuthCallbackUrl())
+ipcMain.handle('overlay:get-app-version', () => app.getVersion())
 ipcMain.handle('overlay:get-pending-session-token', () => {
   const token = pendingSessionToken
   pendingSessionToken = ''

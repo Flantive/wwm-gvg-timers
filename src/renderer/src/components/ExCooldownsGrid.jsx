@@ -58,10 +58,25 @@ function normalizeWeaponColumns(teamCooldowns) {
     })
 }
 
-function ExCooldownsGrid({ userCooldowns, team }) {
+function ExCooldownsGrid({ userCooldowns, team, visibleWeaponCodes }) {
   const teamKey = typeof team === 'string' ? team.toLowerCase() : ''
   const teamCooldowns = userCooldowns?.[teamKey]
-  const parsedColumns = useMemo(() => normalizeWeaponColumns(teamCooldowns), [teamCooldowns])
+  const visibleSet = useMemo(
+    () =>
+      new Set(
+        Array.isArray(visibleWeaponCodes)
+          ? visibleWeaponCodes.map((item) => String(item))
+          : weaponOrder
+      ),
+    [visibleWeaponCodes]
+  )
+  const parsedColumns = useMemo(
+    () =>
+      normalizeWeaponColumns(teamCooldowns).filter((column) =>
+        visibleSet.has(column.weaponCode)
+      ),
+    [teamCooldowns, visibleSet]
+  )
   const [columns, setColumns] = useState([])
 
   useEffect(() => {

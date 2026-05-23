@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { resetCommanderBuff, resetGvg, submitExCooldown } from '../services/serverApi'
+import ConnectedUsersView from './ConnectedUsersView'
 
 function TimersScreen({
   gvgScope,
@@ -18,6 +19,7 @@ function TimersScreen({
   const [syncError, setSyncError] = useState('')
   const [resetPhase, setResetPhase] = useState('idle')
   const [countdownValue, setCountdownValue] = useState(3)
+  const [activeView, setActiveView] = useState('timers')
   const inFlightFieldsRef = useRef(new Set())
   const enabledCommanderFields = useMemo(
     () =>
@@ -329,34 +331,85 @@ function TimersScreen({
       ) : null}
 
       <div className="p-4 space-y-2 max-h-[420px] overflow-y-auto">
-        {children}
+        {activeView === 'users' ? <ConnectedUsersView gvgScope={gvgScope} /> : children}
       </div>
 
       <div
-        className={`p-3 border-t border-white/10 flex items-center ${isCommander ? 'justify-between' : 'justify-start'}`}
+        className={`p-3 border-t border-white/10 flex items-center ${
+          activeView === 'users' || isCommander ? 'justify-between' : 'justify-start'
+        }`}
         style={{ WebkitAppRegion: 'no-drag' }}
       >
-        <button
-          onClick={onOpenSettings}
-          className="w-10 h-10 p-1.5 flex items-center justify-center text-white/70 border border-white/20 rounded-lg hover:bg-white/10 transition-colors"
-          aria-label="Open settings"
-          title="Settings"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.9"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onOpenSettings}
+            className="w-10 h-10 p-1.5 flex items-center justify-center text-white/70 border border-white/20 rounded-lg hover:bg-white/10 transition-colors"
+            aria-label="Open settings"
+            title="Settings"
           >
-            <path d="M10.6 3.6h2.8l.5 2a6.8 6.8 0 0 1 1.7.7l1.8-1 2 2-1 1.8c.3.5.5 1.1.7 1.7l2 .5v2.8l-2 .5a6.8 6.8 0 0 1-.7 1.7l1 1.8-2 2-1.8-1a6.8 6.8 0 0 1-1.7.7l-.5 2h-2.8l-.5-2a6.8 6.8 0 0 1-1.7-.7l-1.8 1-2-2 1-1.8a6.8 6.8 0 0 1-.7-1.7l-2-.5v-2.8l2-.5a6.8 6.8 0 0 1 .7-1.7l-1-1.8 2-2 1.8 1c.5-.3 1.1-.5 1.7-.7z" />
-            <circle cx="12" cy="12" r="2.6" />
-          </svg>
-        </button>
-        {isCommander ? (
+            <svg
+              viewBox="0 0 24 24"
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.9"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M10.6 3.6h2.8l.5 2a6.8 6.8 0 0 1 1.7.7l1.8-1 2 2-1 1.8c.3.5.5 1.1.7 1.7l2 .5v2.8l-2 .5a6.8 6.8 0 0 1-.7 1.7l1 1.8-2 2-1.8-1a6.8 6.8 0 0 1-1.7.7l-.5 2h-2.8l-.5-2a6.8 6.8 0 0 1-1.7-.7l-1.8 1-2-2 1-1.8a6.8 6.8 0 0 1-.7-1.7l-2-.5v-2.8l2-.5a6.8 6.8 0 0 1 .7-1.7l-1-1.8 2-2 1.8 1c.5-.3 1.1-.5 1.7-.7z" />
+              <circle cx="12" cy="12" r="2.6" />
+            </svg>
+          </button>
+          {activeView === 'users' ? (
+            <button
+              onClick={() => setActiveView('timers')}
+              className="w-10 h-10 p-1.5 flex items-center justify-center text-white/70 border border-white/20 rounded-lg hover:bg-white/10 transition-colors"
+              aria-label="Back to timers"
+              title="Back to timers"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.9"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="8" />
+                <path d="M12 8v4l2.8 1.6" />
+              </svg>
+            </button>
+          ) : (
+            <button
+              onClick={() => setActiveView('users')}
+              className="w-10 h-10 p-1.5 flex items-center justify-center text-white/70 border border-white/20 rounded-lg hover:bg-white/10 transition-colors"
+              aria-label="Connected users"
+              title="Connected users"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="8" r="2.2" />
+                <circle cx="6.8" cy="10" r="1.8" />
+                <circle cx="17.2" cy="10" r="1.8" />
+                <path d="M7.5 17.2c.9-2 2.4-3 4.5-3s3.6 1 4.5 3" />
+                <path d="M3.8 17.2c.5-1.4 1.5-2.2 2.9-2.5" />
+                <path d="M20.2 17.2c-.5-1.4-1.5-2.2-2.9-2.5" />
+              </svg>
+            </button>
+          )}
+        </div>
+        {activeView === 'timers' && isCommander ? (
           <button
             onClick={resetGvgFromServer}
             className={`px-3 py-1.5 text-xs font-semibold bg-transparent border rounded-lg transition-colors ${

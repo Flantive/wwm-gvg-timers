@@ -18,6 +18,9 @@ function formatTime(totalSeconds) {
   const safeSeconds = Math.max(0, Math.floor(totalSeconds))
   const min = Math.floor(safeSeconds / 60)
   const sec = safeSeconds % 60
+  if (min === 0) {
+    return `${sec}`
+  }
   return `${min}:${sec < 10 ? '0' : ''}${sec}`
 }
 
@@ -126,7 +129,7 @@ function ExCooldownsGrid({ userCooldowns, team, visibleWeaponCodes }) {
           {column.players.map((player) => (
             <div key={`${column.weaponCode}-${player.playerName}`} className="flex items-center justify-between gap-2">
               <span className="text-[11px] text-white/80 truncate">{player.playerName}</span>
-              <span className={`text-[11px] font-mono tabular-nums ${player.cooldown <= 0 ? 'text-emerald-400' : 'text-sky-300'}`}>
+              <span className={`text-[11px] font-mono tabular-nums ${player.cooldown <= 0 ? 'text-emerald-400' : 'text-white'}`}>
                 {player.cooldown <= 0 ? 'READY' : formatTime(player.cooldown)}
               </span>
             </div>

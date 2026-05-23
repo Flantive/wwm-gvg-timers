@@ -761,12 +761,22 @@ function App() {
 
     headers.team = setup.team
 
+    const selectedWeaponCodes = [setup.firstWeapon, setup.secondWeapon].filter(
+      (weaponCode) => typeof weaponCode === 'string' && weaponCode.trim().length > 0
+    )
+    if (selectedWeaponCodes[0]) {
+      headers.weaponCode1 = selectedWeaponCodes[0]
+    }
+    if (selectedWeaponCodes[1]) {
+      headers.weaponCode2 = selectedWeaponCodes[1]
+    }
+
     if (sessionToken) {
       headers['X-Session-Token'] = sessionToken
     }
 
     return headers
-  }, [requestUserName, sessionToken, setup.team])
+  }, [requestUserName, sessionToken, setup.firstWeapon, setup.secondWeapon, setup.team])
 
   const submitSetup = () => {
     setSetupError('')

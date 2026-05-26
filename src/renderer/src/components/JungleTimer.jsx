@@ -4,12 +4,16 @@ import { speakWithPreferredVoice } from '../services/tts'
 
 const jungleTimerName = 'Jungle Respawn'
 const jungleBreakpoints = [1800, 1500, 1200, 900, 600, 300, 0]
+const maxCustomAnnouncementTime = 35 * 60 + 60
 
-function JungleTimer({ gvgScope }) {
+function JungleTimer({ gvgScope, ttsSettings }) {
   const totalRemaining = Number(gvgScope?.timeRemaining)
   const hasScopeTime = Number.isFinite(totalRemaining)
   const [localRemaining, setLocalRemaining] = useState(0)
   const prevCountdownRef = useRef(null)
+  const prevRemainingRef = useRef(null)
+  const announcedCustomRef = useRef(new Set())
+  const startedAtRef = useRef('')
 
   const formatTime = (seconds) => {
     const min = Math.floor(seconds / 60)
@@ -97,8 +101,22 @@ function JungleTimer({ gvgScope }) {
   const thirtySecondCallout = isPreThirtyWindow
     ? 'Game starting in 30 seconds'
     : isBossChokingWindow
-      ? 'Boss in 30 seconds'
+    ? 'Boss in 30 seconds'
       : 'Jungle in 30 seconds'
+  const gameStartAnnouncementsEnabled = ttsSettings?.gameStart !== false
+  const jungleTimerAnnouncementsEnabled = ttsSettings?.jungleTimers !== false
+  const customAnnouncements = Array.isArray(ttsSettings?.customAnnouncements)
+    ? ttsSettings.customAnnouncements
+    : []
+  useEffect(() => {
+    const startedAt = typeof gvgScope?.startedAt === 'string' ? gvgScope.startedAt : ''
+    if (startedAtRef.current !== startedAt) {
+      startedAtRef.current = startedAt
+      prevCountdownRef.current = null
+      prevRemainingRef.current = null
+      announcedCustomRef.current = new Set()
+    }
+  }, [gvgScope?.startedAt])
 
   useEffect(() => {
     const previous = prevCountdownRef.current
@@ -112,16 +130,73 @@ function JungleTimer({ gvgScope }) {
     const crossedMinute = previous > 60 && countdown <= 60
     const crossedThirty = previous > 30 && countdown <= 30
 
-    if (crossedMinute) {
+    const builtInAnnouncementEnabled = isPreThirtyWindow
+      ? gameStartAnnouncementsEnabled
+      : jungleTimerAnnouncementsEnabled
+
+    if (crossedMinute && builtInAnnouncementEnabled) {
       speakWithPreferredVoice(minuteCallout)
     }
 
-    if (crossedThirty) {
+    if (crossedThirty && builtInAnnouncementEnabled) {
       speakWithPreferredVoice(thirtySecondCallout)
     }
 
     prevCountdownRef.current = countdown
-  }, [countdown, minuteCallout, thirtySecondCallout])
+  }, [
+    countdown,
+    gameStartAnnouncementsEnabled,
+    isPreThirtyWindow,
+    jungleTimerAnnouncementsEnabled,
+    minuteCallout,
+    thirtySecondCallout,
+  ])
+
+  useEffect(() => {
+    const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window
+    const previousRemaining = prevRemainingRef.current
+
+    if (!Number.isFinite(previousRemaining) || !canSpeak) {
+      prevRemainingRef.current = localRemaining
+      return
+    }
+
+    for (const announcement of customAnnouncements) {
+      if (!announcement || announcement.enabled === false) {
+        continue
+      }
+
+      const text = String(announcement.text ?? '').trim()
+      if (!text) {
+        continue
+      }
+
+      const id = typeof announcement.id === 'string' && announcement.id
+      if (!id) {
+        continue
+      }
+
+      const minutes = Number(announcement.minutes)
+      const seconds = Number(announcement.seconds)
+      const safeMinutes = Number.isFinite(minutes) ? Math.max(0, Math.min(35, Math.floor(minutes))) : 0
+      const safeSeconds = Number.isFinite(seconds) ? Math.max(0, Math.min(60, Math.floor(seconds))) : 0
+      const targetRemaining = Math.max(
+        0,
+        Math.min(maxCustomAnnouncementTime, safeMinutes * 60 + safeSeconds)
+      )
+
+      if (announcedCustomRef.current.has(id)) {
+        continue
+      }
+
+      if (previousRemaining > targetRemaining && localRemaining <= targetRemaining) {
+        speakWithPreferredVoice(text)
+        announcedCustomRef.current.add(id)
+      }
+    }
+
+    prevRemainingRef.current = localRemaining
+  }, [customAnnouncements, localRemaining])
 
   return (
     <div

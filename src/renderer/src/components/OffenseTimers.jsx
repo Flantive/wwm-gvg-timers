@@ -10,12 +10,13 @@ function OffenseTimers(props) {
 
   return (
     <TimersScreen {...props}>
-      <JungleTimer gvgScope={props.gvgScope} />
+      <JungleTimer gvgScope={props.gvgScope} ttsSettings={props.ttsSettings} />
       <div className={isSmall ? 'grid grid-cols-3 gap-2' : 'space-y-2'}>
         <CommanderHealcut
           gvgScope={props.gvgScope}
           serverUrl={props.serverUrl}
           postHeaders={props.postHeaders}
+          ttsSettings={props.ttsSettings}
           canReset={props.isCommander}
           onResetSuccess={props.onRequestStatusRefresh}
           compact={isSmall}

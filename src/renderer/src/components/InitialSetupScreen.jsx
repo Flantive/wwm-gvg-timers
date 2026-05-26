@@ -3,7 +3,7 @@ import UpdateAvailableNotice from './UpdateAvailableNotice'
 
 const teamOptions = ['Offense', 'Defense']
 const commanderTimerSizeOptions = ['Big', 'Small']
-const settingsTabs = ['General', 'Keybinds', 'Display']
+const settingsTabs = ['General', 'Keybinds', 'Display', 'TTS']
 const gearOptions = [
   { label: 'Mo Blade (suck)', code: 'mo_blade' },
   { label: 'Ink Fan (wall)', code: 'ink_fan' },
@@ -15,6 +15,11 @@ const exCooldownDisplayOptions = [
   { code: 'heal_fan', label: 'Heal Fan' },
   { code: 'ink_fan', label: 'Ink Fan (wall)' },
   { code: 'twin_blades', label: 'Twin Blades' },
+]
+const ttsAnnouncementConfigs = [
+  { key: 'gameStart', label: 'Game Start' },
+  { key: 'jungleTimers', label: 'Jungle Timers' },
+  { key: 'healcutEnabled', label: 'Healcut Enabled' },
 ]
 const commanderKeybindConfigs = [
   {
@@ -60,6 +65,22 @@ const normalizeCooldownInput = (value) => {
   }
 
   return Math.max(0, Math.floor(parsed))
+}
+const clampTtsMinutes = (value) => {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) {
+    return 0
+  }
+
+  return Math.max(0, Math.min(35, Math.floor(parsed)))
+}
+const clampTtsSeconds = (value) => {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) {
+    return 0
+  }
+
+  return Math.max(0, Math.min(60, Math.floor(parsed)))
 }
 
 function InitialSetupScreen({
@@ -242,6 +263,10 @@ function InitialSetupScreen({
   const visibleExWeaponSet = new Set(
     Array.isArray(setup.visibleExWeapons) ? setup.visibleExWeapons : []
   )
+  const ttsAnnouncements = setup.ttsAnnouncements ?? {}
+  const customTtsAnnouncements = Array.isArray(setup.customTtsAnnouncements)
+    ? setup.customTtsAnnouncements
+    : []
 
   const toggleVisibleExWeapon = (weaponCode) => {
     const nextVisible = exCooldownDisplayOptions
@@ -254,6 +279,40 @@ function InitialSetupScreen({
       })
 
     onSetupChange('visibleExWeapons', nextVisible)
+  }
+
+  const toggleBuiltInTtsAnnouncement = (key) => {
+    onSetupChange('ttsAnnouncements', {
+      ...ttsAnnouncements,
+      [key]: !ttsAnnouncements[key],
+    })
+  }
+
+  const addCustomAnnouncement = () => {
+    onSetupChange('customTtsAnnouncements', [
+      ...customTtsAnnouncements,
+      {
+        id: `custom_tts_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        enabled: true,
+        text: '',
+        minutes: 30,
+        seconds: 0,
+      },
+    ])
+  }
+
+  const updateCustomAnnouncement = (id, patch) => {
+    const next = customTtsAnnouncements.map((item) =>
+      item.id === id ? { ...item, ...patch } : item
+    )
+    onSetupChange('customTtsAnnouncements', next)
+  }
+
+  const removeCustomAnnouncement = (id) => {
+    onSetupChange(
+      'customTtsAnnouncements',
+      customTtsAnnouncements.filter((item) => item.id !== id)
+    )
   }
 
   return (
@@ -538,7 +597,7 @@ function InitialSetupScreen({
             other windows. Close the app to restore normal key behavior.
           </div>
         </div>
-      ) : (
+      ) : activeTab === 'Display' ? (
         <div className="space-y-2">
           <div className="bg-white/5 rounded-xl px-3 py-2 border border-white/10 space-y-2">
             <div className="text-xs text-white/70">Commander Timers</div>
@@ -596,6 +655,108 @@ function InitialSetupScreen({
               onChange={(event) => onSetupChange('transparency', Number(event.target.value))}
               className="w-full accent-emerald-400"
             />
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="bg-white/5 rounded-xl px-3 py-2 border border-white/10 space-y-2">
+            <div className="text-xs text-white/70">Announcements</div>
+            <div className="space-y-1.5">
+              {ttsAnnouncementConfigs.map((config) => (
+                <label key={config.key} className="flex items-center gap-2 text-sm text-white/85">
+                  <input
+                    type="checkbox"
+                    checked={ttsAnnouncements[config.key] !== false}
+                    onChange={() => toggleBuiltInTtsAnnouncement(config.key)}
+                    className="h-4 w-4 accent-emerald-400"
+                  />
+                  <span>{config.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white/5 rounded-xl px-3 py-2 border border-white/10 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="text-xs text-white/70">Custom TTS (personal)</div>
+              <button
+                onClick={addCustomAnnouncement}
+                className="px-2.5 py-1 text-[11px] font-semibold rounded-lg border border-white/20 text-white/80 hover:bg-white/10 transition-colors"
+              >
+                Add announcement
+              </button>
+            </div>
+
+            {customTtsAnnouncements.length === 0 ? (
+              <div className="text-[11px] text-white/55">No custom announcements added.</div>
+            ) : (
+              <div className="space-y-1.5">
+                {customTtsAnnouncements.map((announcement) => (
+                  <div
+                    key={announcement.id}
+                    className="grid grid-cols-[18px_1fr_90px_20px] gap-2 items-center"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={announcement.enabled !== false}
+                      onChange={(event) =>
+                        updateCustomAnnouncement(announcement.id, {
+                          enabled: event.target.checked,
+                        })
+                      }
+                      className="h-4 w-4 accent-emerald-400"
+                    />
+                    <input
+                      type="text"
+                      value={announcement.text ?? ''}
+                      maxLength={30}
+                      onChange={(event) =>
+                        updateCustomAnnouncement(announcement.id, {
+                          text: event.target.value.slice(0, 30),
+                        })
+                      }
+                      placeholder="Custom announcement"
+                      className="w-full px-2.5 py-1.5 text-xs text-white bg-white/10 border border-white/20 rounded-lg outline-none focus:border-sky-400/70"
+                    />
+                    <div className="flex items-center gap-1 text-[10px] text-white/65">
+                      <input
+                        type="number"
+                        min="0"
+                        max="35"
+                        value={announcement.minutes ?? 0}
+                        onChange={(event) =>
+                          updateCustomAnnouncement(announcement.id, {
+                            minutes: clampTtsMinutes(event.target.value),
+                          })
+                        }
+                        className="no-spin w-10 px-1.5 py-1 text-xs text-white bg-white/10 border border-white/20 rounded-md outline-none focus:border-sky-400/70"
+                      />
+                      <span>:</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="60"
+                        value={announcement.seconds ?? 0}
+                        onChange={(event) =>
+                          updateCustomAnnouncement(announcement.id, {
+                            seconds: clampTtsSeconds(event.target.value),
+                          })
+                        }
+                        className="no-spin w-10 px-1.5 py-1 text-xs text-white bg-white/10 border border-white/20 rounded-md outline-none focus:border-sky-400/70"
+                      />
+                    </div>
+                    <button
+                      onClick={() => removeCustomAnnouncement(announcement.id)}
+                      className="h-6 px-2 flex items-center justify-center text-[11px] font-semibold rounded-lg border border-red-500/50 text-red-300 hover:bg-red-500/10 transition-colors"
+                      aria-label="Remove custom announcement"
+                      title="Remove"
+                    >
+                      X
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

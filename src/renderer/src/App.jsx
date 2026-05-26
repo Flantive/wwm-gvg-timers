@@ -29,6 +29,11 @@ const authWeaponCodeMap = {
   'infernal twinblades': 'twin_blades',
 }
 const exCooldownDisplayOrder = ['mo_blade', 'heal_fan', 'ink_fan', 'twin_blades']
+const builtInTtsAnnouncementDefaults = {
+  gameStart: true,
+  jungleTimers: true,
+  healcutEnabled: true,
+}
 const githubRepoReleasesUrl = 'https://github.com/Flantive/wwm-gvg-timers/releases'
 const githubReleasesApiUrl = 'https://api.github.com/repos/Flantive/wwm-gvg-timers/releases?per_page=30'
 
@@ -67,6 +72,39 @@ const normalizeKeybind = (value, fallback) => {
   }
 
   return Array.from(new Set(parts)).join('+')
+}
+const normalizeTtsText = (value) => String(value ?? '').slice(0, 30)
+const clampTtsMinutes = (value) => {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) {
+    return 0
+  }
+
+  return Math.max(0, Math.min(35, Math.floor(parsed)))
+}
+const clampTtsSeconds = (value) => {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) {
+    return 0
+  }
+
+  return Math.max(0, Math.min(60, Math.floor(parsed)))
+}
+const normalizeCustomTtsAnnouncements = (value) => {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value.map((item, index) => ({
+    id:
+      typeof item?.id === 'string' && item.id.trim()
+        ? item.id.trim()
+        : `custom_tts_${index}`,
+    enabled: typeof item?.enabled === 'boolean' ? item.enabled : true,
+    text: normalizeTtsText(item?.text),
+    minutes: clampTtsMinutes(item?.minutes),
+    seconds: clampTtsSeconds(item?.seconds),
+  }))
 }
 
 const mapAuthWeaponNameToCode = (weaponName) => {
@@ -175,6 +213,8 @@ const defaultSetup = {
   commanderHealcutKeybindEnabled: true,
   commanderSprintKeybindEnabled: true,
   commanderCarrierDmgKeybindEnabled: true,
+  ttsAnnouncements: builtInTtsAnnouncementDefaults,
+  customTtsAnnouncements: [],
   transparency: 100,
 }
 
@@ -291,6 +331,24 @@ function loadSavedSetup() {
       typeof parsed?.setup?.commanderCarrierDmgKeybindEnabled === 'boolean'
         ? parsed.setup.commanderCarrierDmgKeybindEnabled
         : defaultSetup.commanderCarrierDmgKeybindEnabled
+    const parsedTtsAnnouncements = parsed?.setup?.ttsAnnouncements
+    const ttsAnnouncements = {
+      gameStart:
+        typeof parsedTtsAnnouncements?.gameStart === 'boolean'
+          ? parsedTtsAnnouncements.gameStart
+          : builtInTtsAnnouncementDefaults.gameStart,
+      jungleTimers:
+        typeof parsedTtsAnnouncements?.jungleTimers === 'boolean'
+          ? parsedTtsAnnouncements.jungleTimers
+          : builtInTtsAnnouncementDefaults.jungleTimers,
+      healcutEnabled:
+        typeof parsedTtsAnnouncements?.healcutEnabled === 'boolean'
+          ? parsedTtsAnnouncements.healcutEnabled
+          : builtInTtsAnnouncementDefaults.healcutEnabled,
+    }
+    const customTtsAnnouncements = normalizeCustomTtsAnnouncements(
+      parsed?.setup?.customTtsAnnouncements
+    )
 
     return {
       setup: {
@@ -321,6 +379,8 @@ function loadSavedSetup() {
         commanderHealcutKeybindEnabled,
         commanderSprintKeybindEnabled,
         commanderCarrierDmgKeybindEnabled,
+        ttsAnnouncements,
+        customTtsAnnouncements,
         transparency: clampTransparency(
           Number.isFinite(Number(parsed?.setup?.transparency))
             ? Number(parsed.setup.transparency)
@@ -976,6 +1036,10 @@ function App() {
                 userName={requestUserName}
                 commanderTimersSize={setup.commanderTimersSize}
                 visibleExWeapons={setup.visibleExWeapons}
+                ttsSettings={{
+                  ...setup.ttsAnnouncements,
+                  customAnnouncements: setup.customTtsAnnouncements,
+                }}
                 userCooldowns={statusUserCooldowns}
                 commanderBuffKeybinds={{
                   healcut: setup.commanderHealcutKeybindEnabled

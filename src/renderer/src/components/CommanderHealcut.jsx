@@ -2,7 +2,15 @@ import { useEffect, useRef } from 'react'
 import CommanderBuffTimer from './CommanderBuffTimer'
 import { speakWithPreferredVoice } from '../services/tts'
 
-function CommanderHealcut({ gvgScope, serverUrl, postHeaders, canReset, onResetSuccess, compact }) {
+function CommanderHealcut({
+  gvgScope,
+  serverUrl,
+  postHeaders,
+  canReset,
+  onResetSuccess,
+  compact,
+  ttsSettings,
+}) {
   const wasActiveRef = useRef(false)
   const initializedRef = useRef(false)
 
@@ -22,12 +30,12 @@ function CommanderHealcut({ gvgScope, serverUrl, postHeaders, canReset, onResetS
       return
     }
 
-    if (!wasActiveRef.current && isActive) {
+    if (!wasActiveRef.current && isActive && ttsSettings?.healcutEnabled !== false) {
       speakWithPreferredVoice('Healcut enabled')
     }
 
     wasActiveRef.current = isActive
-  }, [isActive])
+  }, [isActive, ttsSettings?.healcutEnabled])
 
   return (
     <CommanderBuffTimer

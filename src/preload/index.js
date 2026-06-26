@@ -30,6 +30,9 @@ const api = {
   setOverlayHeight(height) {
     ipcRenderer.send('overlay:set-height', height)
   },
+  setOverlayWidth(width) {
+    ipcRenderer.send('overlay:set-width', width)
+  },
   hideOverlay() {
     ipcRenderer.send('overlay:hide')
   },

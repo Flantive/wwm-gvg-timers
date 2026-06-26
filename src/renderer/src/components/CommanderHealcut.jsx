@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import CommanderBuffTimer from './CommanderBuffTimer'
+import healcutIcon from '../assets/healcut.png'
 import { speakWithPreferredVoice } from '../services/tts'
 
 function CommanderHealcut({
@@ -9,6 +10,7 @@ function CommanderHealcut({
   canReset,
   onResetSuccess,
   compact,
+  oneRow,
   ttsSettings,
 }) {
   const wasActiveRef = useRef(false)
@@ -46,6 +48,8 @@ function CommanderHealcut({
       label="Commander: Healcut"
       compactLabel="Healcut"
       compact={compact}
+      oneRow={oneRow}
+      iconSrc={healcutIcon}
       canReset={canReset}
       onResetSuccess={onResetSuccess}
     />

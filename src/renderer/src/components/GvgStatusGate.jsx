@@ -6,6 +6,7 @@ function GvgStatusGate({
   serverUrl,
   postHeaders,
   refreshSeq,
+  oneRowLayout,
   onGvgRunningChange,
   onGvgScopeChange,
   onStatusChange,
@@ -116,6 +117,89 @@ function GvgStatusGate({
 
   if (gvgRunning) {
     return typeof children === 'function' ? children() : children
+  }
+
+  if (oneRowLayout) {
+    return (
+      <>
+        {statusError ? (
+          <div className="px-3 py-1 text-[11px] text-red-300 bg-red-950/30 border-b border-red-500/40">
+            {statusError}
+          </div>
+        ) : null}
+        {startError ? (
+          <div className="px-3 py-1 text-[11px] text-red-300 bg-red-950/30 border-b border-red-500/40">
+            {startError}
+          </div>
+        ) : null}
+
+        <div
+          className="py-1 pl-10 pr-2 max-h-[420px] overflow-hidden grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2"
+        >
+          <div className="min-w-0 flex items-center justify-center gap-2" style={{ WebkitAppRegion: 'no-drag' }}>
+            {mode === 'Commander' ? (
+              <>
+                <span className="text-xs text-white/65 whitespace-nowrap">Start in</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={additionalMinutes}
+                  onChange={(event) => setAdditionalMinutes(event.target.value)}
+                  className="no-spin w-10 px-1.5 py-1 text-xs text-white bg-white/10 border border-white/20 rounded-md outline-none focus:border-sky-400/70"
+                  aria-label="Minutes till GvG starts"
+                />
+                <span className="text-xs text-white/55">:</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="59"
+                  value={additionalSeconds}
+                  onChange={(event) => setAdditionalSeconds(event.target.value)}
+                  className="no-spin w-10 px-1.5 py-1 text-xs text-white bg-white/10 border border-white/20 rounded-md outline-none focus:border-sky-400/70"
+                  aria-label="Seconds till GvG starts"
+                />
+              </>
+            ) : (
+              <span className="text-xs text-white/75 truncate">
+                GvG not started. Waiting for updates.
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0" style={{ WebkitAppRegion: 'no-drag' }}>
+            <button
+              onClick={onOpenSettings}
+              className="w-8 h-8 p-1 flex items-center justify-center text-white/70 border border-white/20 rounded-lg hover:bg-white/10 transition-colors"
+              aria-label="Open settings"
+              title="Settings"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="w-4.5 h-4.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.9"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M10.6 3.6h2.8l.5 2a6.8 6.8 0 0 1 1.7.7l1.8-1 2 2-1 1.8c.3.5.5 1.1.7 1.7l2 .5v2.8l-2 .5a6.8 6.8 0 0 1-.7 1.7l1 1.8-2 2-1.8-1a6.8 6.8 0 0 1-1.7.7l-.5 2h-2.8l-.5-2a6.8 6.8 0 0 1-1.7-.7l-1.8 1-2-2 1-1.8a6.8 6.8 0 0 1-.7-1.7l-2-.5v-2.8l2-.5a6.8 6.8 0 0 1 .7-1.7l-1-1.8 2-2 1.8 1c.5-.3 1.1-.5 1.7-.7z" />
+                <circle cx="12" cy="12" r="2.6" />
+              </svg>
+            </button>
+            {mode === 'Commander' ? (
+              <button
+                onClick={startGvg}
+                disabled={startSubmitting}
+                className="h-8 px-2 text-[10px] font-semibold bg-transparent border rounded-lg border-emerald-400/70 text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50 transition-colors whitespace-nowrap"
+              >
+                Start
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </>
+    )
   }
 
   return (

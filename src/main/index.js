@@ -255,7 +255,7 @@ function createWindow() {
     hasShadow: false,
     resizable: true,
     minWidth: 260,
-    minHeight: 240,
+    minHeight: 40,
     skipTaskbar: !app.isPackaged,
     webPreferences: {
       preload: preloadPath,
@@ -423,9 +423,24 @@ ipcMain.on('overlay:set-height', (_event, nextHeight) => {
     return
   }
 
-  const clampedHeight = Math.max(240, Math.min(Math.ceil(parsedHeight), 2000))
+  const clampedHeight = Math.max(40, Math.min(Math.ceil(parsedHeight), 2000))
   const [currentWidth] = overlayWindow.getSize()
   overlayWindow.setSize(currentWidth, clampedHeight, false)
+})
+
+ipcMain.on('overlay:set-width', (_event, nextWidth) => {
+  if (!overlayWindow || overlayWindow.isDestroyed()) {
+    return
+  }
+
+  const parsedWidth = Number(nextWidth)
+  if (!Number.isFinite(parsedWidth)) {
+    return
+  }
+
+  const clampedWidth = Math.max(260, Math.min(Math.ceil(parsedWidth), 2000))
+  const [, currentHeight] = overlayWindow.getSize()
+  overlayWindow.setSize(clampedWidth, currentHeight, false)
 })
 
 ipcMain.on('overlay:hide', () => {

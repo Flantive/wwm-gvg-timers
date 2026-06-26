@@ -7,6 +7,7 @@ import WelcomeScreen from './components/WelcomeScreen'
 import { fetchAuthMe, logoutAuth } from './services/serverApi'
 
 const baseOverlayWidth = 380
+const oneRowOverlayWidth = 420
 const weaponOptions = [
   { label: 'Mo Blade (suck)', code: 'mo_blade' },
   { label: 'Ink Fan (wall)', code: 'ink_fan' },
@@ -255,7 +256,11 @@ function loadSavedSetup() {
 
     const parsed = JSON.parse(raw)
     const team = parsed?.setup?.team === 'Defense' ? 'Defense' : 'Offense'
-    const commanderTimersSize = parsed?.setup?.commanderTimersSize === 'Big' ? 'Big' : 'Small'
+    const commanderTimersSize = ['Big', 'Small', 'One Row'].includes(
+      parsed?.setup?.commanderTimersSize
+    )
+      ? parsed.setup.commanderTimersSize
+      : 'Small'
     const savedVisibleExWeapons = Array.isArray(parsed?.setup?.visibleExWeapons)
       ? parsed.setup.visibleExWeapons.map((item) => String(item))
       : null
@@ -396,7 +401,7 @@ function loadSavedSetup() {
 
 function App() {
   const savedAuth = loadSavedAuth()
-  const [, setGvgRunning] = useState(false)
+  const [gvgRunning, setGvgRunning] = useState(false)
   const [gvgScope, setGvgScope] = useState(null)
   const [statusUserCooldowns, setStatusUserCooldowns] = useState(null)
   const [serverUrl, setServerUrl] = useState('')
@@ -438,6 +443,8 @@ function App() {
     ? normalizedIgnForRequests
     : authUserName.trim()
   const TeamTimers = setup.team === 'Defense' ? DefenseTimers : OffenseTimers
+  const useCompactInvisibleHeader = isConfigured && setup.commanderTimersSize === 'One Row'
+  const activeOverlayWidth = useCompactInvisibleHeader ? oneRowOverlayWidth : baseOverlayWidth
   const localHotkeyBindings = {
     ...(hasCommanderPermissions
       ? {
@@ -739,14 +746,23 @@ function App() {
 
   useEffect(() => {
     const updateScale = () => {
-      const widthScale = window.innerWidth / baseOverlayWidth
+      if (useCompactInvisibleHeader) {
+        setOverlayScale(1)
+        return
+      }
+
+      const widthScale = window.innerWidth / activeOverlayWidth
       setOverlayScale(Math.max(0.2, widthScale))
     }
 
     updateScale()
     window.addEventListener('resize', updateScale)
     return () => window.removeEventListener('resize', updateScale)
-  }, [])
+  }, [activeOverlayWidth, useCompactInvisibleHeader])
+
+  useEffect(() => {
+    window.api?.setOverlayWidth?.(activeOverlayWidth)
+  }, [activeOverlayWidth])
 
   useEffect(() => {
     const bottomSafetyPixels = Math.max(4, Math.ceil(3 * overlayScale))
@@ -950,39 +966,61 @@ function App() {
     <div className="w-screen h-screen overflow-hidden">
       <div
         style={{
-          width: `${baseOverlayWidth}px`,
+          width: useCompactInvisibleHeader ? '100vw' : `${activeOverlayWidth}px`,
           transform: `scale(${overlayScale})`,
           transformOrigin: 'top left',
         }}
       >
         <div
           ref={overlayContentRef}
-          className="w-full backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl text-white overflow-hidden flex flex-col"
+          className="relative w-full backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl text-white overflow-hidden flex flex-col"
           style={{
             backgroundColor: `rgba(0, 0, 0, ${transparencyRatio})`,
             '--overlay-panel-alpha': panelAlpha,
           }}
         >
-          <div
-            className="px-3 py-2 bg-black/90 flex items-center justify-between border-b border-white/10 cursor-move"
-            style={{ WebkitAppRegion: 'drag' }}
-          >
-            <h1 className="text-sm font-semibold tracking-wide flex items-baseline gap-1.5">
-              <span>WWM GvG Timers</span>
-              {appVersion ? (
-                <span className="text-[10px] font-normal text-white/45">v{appVersion}</span>
-              ) : null}
-            </h1>
-            <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' }}>
-              <span className="text-[10px] text-white/60">Ctrl+Shift+T</span>
-              <button
-                onClick={() => window.api?.hideOverlay?.() || window.close()}
-                className="w-6 h-6 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+          {useCompactInvisibleHeader ? (
+            <div
+              className="absolute left-0 top-0 bottom-0 z-10 w-8 flex items-center justify-center bg-black/40 border-r border-white/10 text-white/50 cursor-move"
+              style={{ WebkitAppRegion: 'drag' }}
+              title="Drag overlay"
+            >
+              <svg
+                viewBox="0 0 16 16"
+                className="w-4 h-4 pointer-events-none"
+                fill="currentColor"
+                aria-hidden="true"
               >
-                X
-              </button>
+                <circle cx="5" cy="4" r="1" />
+                <circle cx="11" cy="4" r="1" />
+                <circle cx="5" cy="8" r="1" />
+                <circle cx="11" cy="8" r="1" />
+                <circle cx="5" cy="12" r="1" />
+                <circle cx="11" cy="12" r="1" />
+              </svg>
             </div>
-          </div>
+          ) : (
+            <div
+              className="px-3 py-2 bg-black/90 flex items-center justify-between border-b border-white/10 cursor-move"
+              style={{ WebkitAppRegion: 'drag' }}
+            >
+              <h1 className="text-sm font-semibold tracking-wide flex items-baseline gap-1.5">
+                <span>WWM GvG Timers</span>
+                {appVersion ? (
+                  <span className="text-[10px] font-normal text-white/45">v{appVersion}</span>
+                ) : null}
+              </h1>
+              <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' }}>
+                <span className="text-[10px] text-white/60">Ctrl+Shift+T</span>
+                <button
+                  onClick={() => window.api?.hideOverlay?.() || window.close()}
+                  className="w-6 h-6 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  X
+                </button>
+              </div>
+            </div>
+          )}
 
           {!sessionToken || authChecking ? (
             <WelcomeScreen
@@ -1018,6 +1056,7 @@ function App() {
               serverUrl={serverUrl}
               postHeaders={postHeaders}
               refreshSeq={statusRefreshSeq}
+              oneRowLayout={setup.commanderTimersSize === 'One Row'}
               onGvgRunningChange={setGvgRunning}
               onGvgScopeChange={setGvgScope}
               onStatusChange={applyStatusTimers}

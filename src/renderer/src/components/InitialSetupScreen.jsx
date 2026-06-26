@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import UpdateAvailableNotice from './UpdateAvailableNotice'
 
 const teamOptions = ['Offense', 'Defense']
-const commanderTimerSizeOptions = ['Big', 'Small']
+const commanderTimerSizeOptions = ['Big', 'Small', 'One Row']
 const settingsTabs = ['General', 'Keybinds', 'Display', 'TTS']
 const gearOptions = [
   { label: 'Mo Blade (suck)', code: 'mo_blade' },
@@ -37,7 +37,7 @@ const commanderKeybindConfigs = [
   {
     field: 'commanderCarrierDmgKeybind',
     enabledField: 'commanderCarrierDmgKeybindEnabled',
-    label: 'Command: Carrier DMG',
+    label: 'Command: Siege DMG',
     fallback: 'Numpad3',
   },
 ]

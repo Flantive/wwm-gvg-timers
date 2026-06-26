@@ -12,6 +12,7 @@ function TimersScreen({
   commanderBuffKeybinds,
   exHotkeyActions,
   localHotkeyBindings,
+  oneRowLayout,
   onRequestStatusRefresh,
   onOpenSettings,
   children,
@@ -21,6 +22,7 @@ function TimersScreen({
   const [countdownValue, setCountdownValue] = useState(3)
   const [activeView, setActiveView] = useState('timers')
   const inFlightFieldsRef = useRef(new Set())
+  const showUsersView = activeView === 'users' && !oneRowLayout
   const enabledCommanderFields = useMemo(
     () =>
       new Set(
@@ -322,6 +324,46 @@ function TimersScreen({
     }
   }
 
+  const settingsButton = (
+    <button
+      onClick={onOpenSettings}
+      className="w-10 h-10 p-1.5 flex items-center justify-center text-white/70 border border-white/20 rounded-lg hover:bg-white/10 transition-colors"
+      aria-label="Open settings"
+      title="Settings"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        className="w-5 h-5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M10.6 3.6h2.8l.5 2a6.8 6.8 0 0 1 1.7.7l1.8-1 2 2-1 1.8c.3.5.5 1.1.7 1.7l2 .5v2.8l-2 .5a6.8 6.8 0 0 1-.7 1.7l1 1.8-2 2-1.8-1a6.8 6.8 0 0 1-1.7.7l-.5 2h-2.8l-.5-2a6.8 6.8 0 0 1-1.7-.7l-1.8 1-2-2 1-1.8a6.8 6.8 0 0 1-.7-1.7l-2-.5v-2.8l2-.5a6.8 6.8 0 0 1 .7-1.7l-1-1.8 2-2 1.8 1c.5-.3 1.1-.5 1.7-.7z" />
+        <circle cx="12" cy="12" r="2.6" />
+      </svg>
+    </button>
+  )
+  const resetGvgButton =
+    isCommander ? (
+      <button
+        onClick={resetGvgFromServer}
+        className={`px-3 py-1.5 text-xs font-semibold bg-transparent border rounded-lg transition-colors ${
+          resetPhase === 'confirm'
+            ? 'text-red-200 border-red-400 hover:bg-red-500/20'
+            : 'text-red-400 border-red-500/50 hover:bg-red-500/10'
+        }`}
+      >
+        {resetPhase === 'countdown'
+          ? `Confirm in ${countdownValue}`
+          : resetPhase === 'confirm'
+            ? 'Confirm Reset'
+            : 'Reset GvG'}
+      </button>
+    ) : null
+
   return (
     <>
       {syncError ? (
@@ -330,38 +372,64 @@ function TimersScreen({
         </div>
       ) : null}
 
-      <div className="p-4 space-y-2 max-h-[420px] overflow-y-auto">
-        {activeView === 'users' ? <ConnectedUsersView gvgScope={gvgScope} /> : children}
-      </div>
-
-      <div
-        className={`p-3 border-t border-white/10 flex items-center ${
-          activeView === 'users' || isCommander ? 'justify-between' : 'justify-start'
-        }`}
-        style={{ WebkitAppRegion: 'no-drag' }}
-      >
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onOpenSettings}
-            className="w-10 h-10 p-1.5 flex items-center justify-center text-white/70 border border-white/20 rounded-lg hover:bg-white/10 transition-colors"
-            aria-label="Open settings"
-            title="Settings"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.9"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+      {oneRowLayout ? (
+        <div className="py-1 pl-10 pr-2 max-h-[420px] overflow-hidden grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+          <div className="min-w-0 overflow-hidden">{children}</div>
+          <div className="flex items-center gap-1.5 shrink-0" style={{ WebkitAppRegion: 'no-drag' }}>
+            <button
+              onClick={onOpenSettings}
+              className="w-8 h-8 p-1 flex items-center justify-center text-white/70 border border-white/20 rounded-lg hover:bg-white/10 transition-colors"
+              aria-label="Open settings"
+              title="Settings"
             >
-              <path d="M10.6 3.6h2.8l.5 2a6.8 6.8 0 0 1 1.7.7l1.8-1 2 2-1 1.8c.3.5.5 1.1.7 1.7l2 .5v2.8l-2 .5a6.8 6.8 0 0 1-.7 1.7l1 1.8-2 2-1.8-1a6.8 6.8 0 0 1-1.7.7l-.5 2h-2.8l-.5-2a6.8 6.8 0 0 1-1.7-.7l-1.8 1-2-2 1-1.8a6.8 6.8 0 0 1-.7-1.7l-2-.5v-2.8l2-.5a6.8 6.8 0 0 1 .7-1.7l-1-1.8 2-2 1.8 1c.5-.3 1.1-.5 1.7-.7z" />
-              <circle cx="12" cy="12" r="2.6" />
-            </svg>
-          </button>
-          {activeView === 'users' ? (
+              <svg
+                viewBox="0 0 24 24"
+                className="w-4.5 h-4.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.9"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M10.6 3.6h2.8l.5 2a6.8 6.8 0 0 1 1.7.7l1.8-1 2 2-1 1.8c.3.5.5 1.1.7 1.7l2 .5v2.8l-2 .5a6.8 6.8 0 0 1-.7 1.7l1 1.8-2 2-1.8-1a6.8 6.8 0 0 1-1.7.7l-.5 2h-2.8l-.5-2a6.8 6.8 0 0 1-1.7-.7l-1.8 1-2-2 1-1.8a6.8 6.8 0 0 1-.7-1.7l-2-.5v-2.8l2-.5a6.8 6.8 0 0 1 .7-1.7l-1-1.8 2-2 1.8 1c.5-.3 1.1-.5 1.7-.7z" />
+                <circle cx="12" cy="12" r="2.6" />
+              </svg>
+            </button>
+            {isCommander ? (
+              <button
+                onClick={resetGvgFromServer}
+                className={`h-8 px-2 text-[10px] font-semibold bg-transparent border rounded-lg transition-colors whitespace-nowrap ${
+                  resetPhase === 'confirm'
+                    ? 'text-red-200 border-red-400 hover:bg-red-500/20'
+                    : 'text-red-400 border-red-500/50 hover:bg-red-500/10'
+                }`}
+              >
+                {resetPhase === 'countdown'
+                  ? `${countdownValue}`
+                  : resetPhase === 'confirm'
+                    ? 'C'
+                    : 'R'}
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        <div className="p-4 space-y-2 max-h-[420px] overflow-y-auto">
+          {showUsersView ? <ConnectedUsersView gvgScope={gvgScope} /> : children}
+        </div>
+      )}
+
+      {!oneRowLayout ? (
+        <div
+          className={`p-3 border-t border-white/10 flex items-center ${
+            showUsersView || isCommander ? 'justify-between' : 'justify-start'
+          }`}
+          style={{ WebkitAppRegion: 'no-drag' }}
+        >
+        <div className="flex items-center gap-2">
+          {settingsButton}
+          {showUsersView ? (
             <button
               onClick={() => setActiveView('timers')}
               className="w-10 h-10 p-1.5 flex items-center justify-center text-white/70 border border-white/20 rounded-lg hover:bg-white/10 transition-colors"
@@ -382,7 +450,7 @@ function TimersScreen({
                 <path d="M12 8v4l2.8 1.6" />
               </svg>
             </button>
-          ) : (
+          ) : !oneRowLayout ? (
             <button
               onClick={() => setActiveView('users')}
               className="w-10 h-10 p-1.5 flex items-center justify-center text-white/70 border border-white/20 rounded-lg hover:bg-white/10 transition-colors"
@@ -407,25 +475,11 @@ function TimersScreen({
                 <path d="M20.2 17.2c-.5-1.4-1.5-2.2-2.9-2.5" />
               </svg>
             </button>
-          )}
+          ) : null}
         </div>
-        {activeView === 'timers' && isCommander ? (
-          <button
-            onClick={resetGvgFromServer}
-            className={`px-3 py-1.5 text-xs font-semibold bg-transparent border rounded-lg transition-colors ${
-              resetPhase === 'confirm'
-                ? 'text-red-200 border-red-400 hover:bg-red-500/20'
-                : 'text-red-400 border-red-500/50 hover:bg-red-500/10'
-            }`}
-          >
-            {resetPhase === 'countdown'
-              ? `Confirm in ${countdownValue}`
-              : resetPhase === 'confirm'
-                ? 'Confirm Reset'
-                : 'Reset GvG'}
-          </button>
-        ) : null}
-      </div>
+        {!showUsersView ? resetGvgButton : null}
+        </div>
+      ) : null}
     </>
   )
 }

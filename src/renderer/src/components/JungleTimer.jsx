@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import chickenGif from '../assets/chicken.gif'
+import jungleIcon from '../assets/jungle.png'
 import { speakWithPreferredVoice } from '../services/tts'
 
 const jungleTimerName = 'Jungle Respawn'
 const jungleBreakpoints = [1800, 1500, 1200, 900, 600, 300, 0]
 const maxCustomAnnouncementTime = 35 * 60 + 60
 
-function JungleTimer({ gvgScope, ttsSettings }) {
+function JungleTimer({ gvgScope, ttsSettings, oneRow }) {
   const totalRemaining = Number(gvgScope?.timeRemaining)
   const hasScopeTime = Number.isFinite(totalRemaining)
   const [localRemaining, setLocalRemaining] = useState(0)
@@ -96,13 +97,13 @@ function JungleTimer({ gvgScope, ttsSettings }) {
   const minuteCallout = isPreThirtyWindow
     ? 'Game starting in 1 minute'
     : isBossChokingWindow
-      ? 'Boss in 1 minute'
-      : 'Jungle in 1 minute'
+      ? 'Boss in 40 seconds'
+      : 'Jungle in 40 seconds'
   const thirtySecondCallout = isPreThirtyWindow
     ? 'Game starting in 30 seconds'
     : isBossChokingWindow
-    ? 'Boss in 30 seconds'
-      : 'Jungle in 30 seconds'
+    ? 'Boss in 20 seconds'
+      : 'Jungle in 20 seconds'
   const gameStartAnnouncementsEnabled = ttsSettings?.gameStart !== false
   const jungleTimerAnnouncementsEnabled = ttsSettings?.jungleTimers !== false
   const customAnnouncements = Array.isArray(ttsSettings?.customAnnouncements)
@@ -127,8 +128,10 @@ function JungleTimer({ gvgScope, ttsSettings }) {
       return
     }
 
-    const crossedMinute = previous > 60 && countdown <= 60
-    const crossedThirty = previous > 30 && countdown <= 30
+    const firstThreshold = isPreThirtyWindow ? 60 : 40
+    const secondThreshold = isPreThirtyWindow ? 30 : 20
+    const crossedMinute = previous > firstThreshold && countdown <= firstThreshold
+    const crossedThirty = previous > secondThreshold && countdown <= secondThreshold
 
     const builtInAnnouncementEnabled = isPreThirtyWindow
       ? gameStartAnnouncementsEnabled
@@ -197,6 +200,21 @@ function JungleTimer({ gvgScope, ttsSettings }) {
 
     prevRemainingRef.current = localRemaining
   }, [customAnnouncements, localRemaining])
+
+  if (oneRow) {
+    return (
+      <div
+        className={`${backgroundClass} rounded-lg px-1.5 py-1 border flex items-center gap-1 ${borderColorClass}`}
+        style={{ WebkitAppRegion: 'no-drag' }}
+        title={timerLabel}
+      >
+        <img src={jungleIcon} alt="" className="w-5 h-5 shrink-0 object-contain" />
+        <span className={`min-w-[42px] text-right font-mono text-base font-bold tabular-nums ${timerColorClass}`}>
+          {formatTime(countdown)}
+        </span>
+      </div>
+    )
+  }
 
   return (
     <div

@@ -9,6 +9,8 @@ function CommanderBuffTimer({
   label,
   compactLabel,
   compact,
+  oneRow,
+  iconSrc,
   canReset,
   onResetSuccess,
 }) {
@@ -69,6 +71,45 @@ function CommanderBuffTimer({
     }
   }
 
+  if (oneRow) {
+    const content = (
+      <>
+        {iconSrc ? <img src={iconSrc} alt="" className="w-5 h-5 shrink-0 object-contain" /> : null}
+        <span className={`min-w-[28px] text-right font-mono text-base font-bold tabular-nums ${timerColorClass}`}>
+          {isReady ? 'RDY' : remaining}
+        </span>
+      </>
+    )
+
+    const className = `${backgroundClass} rounded-lg px-1.5 py-1 border flex items-center gap-1 ${borderColorClass}`
+
+    return (
+      <>
+        {isReady && canReset ? (
+          <button
+            onClick={onReset}
+            disabled={isSubmitting}
+            className={`${className} hover:bg-white/10 transition-colors disabled:opacity-50`}
+            style={{ WebkitAppRegion: 'no-drag' }}
+            aria-label={`Reset ${label}`}
+            title={`${label}: reset and start`}
+          >
+            {content}
+          </button>
+        ) : (
+          <div
+            className={className}
+            style={{ WebkitAppRegion: 'no-drag' }}
+            title={label}
+          >
+            {content}
+          </div>
+        )}
+        {error ? <div className="px-1 text-[11px] text-red-300">{error}</div> : null}
+      </>
+    )
+  }
+
   return (
     <>
       {compact ? (
@@ -81,7 +122,7 @@ function CommanderBuffTimer({
           </div>
           <div className="flex items-center justify-between gap-1">
             <span className={`text-base font-mono font-bold tabular-nums ${timerColorClass}`}>
-              {isReady ? 'READY' : formatTime(remaining)}
+              {isReady ? 'RDY' : formatTime(remaining)}
             </span>
             {isReady && canReset ? (
               <button
@@ -138,7 +179,7 @@ function CommanderBuffTimer({
             </button>
           ) : null}
           <span className={`w-[88px] text-right font-mono text-2xl font-bold tabular-nums ${timerColorClass}`}>
-            {isReady ? 'READY' : formatTime(remaining)}
+            {isReady ? 'RDY' : formatTime(remaining)}
           </span>
         </div>
       )}
